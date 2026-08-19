@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v3.5.0 — труби з водою на всю ширину,
+//  Water Valve Card  v3.6.0 — труби з водою на всю ширину,
 //  центральний корпус фіксований (max-width:400px, центрований).
 // ═══════════════════════════════════════════════════════════════
 
@@ -1492,7 +1492,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 3.5.0 ",
+  "%c WATER-VALVE-CARD %c 3.6.0 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );

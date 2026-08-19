@@ -6,6 +6,6 @@
   "documentation": "https://github.com/kdinya/smart-water-valve",
   "issue_tracker": "https://github.com/kdinya/smart-water-valve/issues",
   "requirements": [],
-  "version": "3.5.0",
+  "version": "3.6.0",
   "iot_class": "calculated"
 }

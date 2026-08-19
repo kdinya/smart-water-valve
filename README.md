@@ -1,29 +1,40 @@
-# Water Valve Card v3.5.0
+# Water Valve Card
 
-## Critical: remove `/local/water-valve-card.js`
-
-If this resource exists, Home Assistant loads the **old** card first. The visual editor will **not** work and default entities will be wrong.
-
-1. **Settings → Dashboards → Resources** → delete `/local/water-valve-card.js`
-2. Delete file `config/www/water-valve-card.js` if present
-3. Install/update via HACS (below)
-4. Restart Home Assistant
-5. **Ctrl+F5**
-6. Console must show: `WATER-VALVE-CARD 3.5.0`
+Home Assistant Lovelace card. **On install/update the integration registers the correct Lovelace resource automatically** (versioned URL).
 
 ## Install
 
-1. HACS → **Integrations** → Custom repositories  
+1. **HACS → Integrations** → Custom repositories  
    `https://github.com/kdinya/smart-water-valve` → **Integration**
-2. Download → **Restart HA**
-3. Settings → Devices & services → **Add integration** → Water Valve Card
-4. Ctrl+F5
-5. Add card → **Water Valve Card** → visual editor
+2. Download **Water Valve Card**
+3. **Restart Home Assistant**
+4. **Settings → Devices & services → Add integration → Water Valve Card**
+5. Hard refresh browser (**Ctrl+F5**)
 
-Default YAML:
+### What happens automatically
+
+- JS is served from `/smart_water_valve/water-valve-card.js`
+- Lovelace resource is created/updated to  
+  `/smart_water_valve/water-valve-card.js?v=3.6.0`
+- Conflicting `/local/water-valve-card.js` resources are **removed**
+- After HACS update + restart, the resource URL version changes so the browser loads the new file
+
+### First time after old manual install
+
+Restart HA once so the integration can delete the old `/local/` resource. Then Ctrl+F5.
+
+## Add card
+
+Dashboard → Add card → **Water Valve Card**
 
 ```yaml
 type: custom:water-valve-card
 language: uk
 name: Smart Water Valve
 ```
+
+Visual editor: language, valve entity, optional leaks + names, animation timing.
+
+## Version
+
+**3.6.0**
