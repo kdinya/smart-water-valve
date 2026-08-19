@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Water Valve Card",
+        "description": "This adds the Lovelace card only. No devices are created. After submit, restart is not required for the entry — hard-refresh the browser (Ctrl+F5), then add the card on a dashboard."
+      }
+    },
+    "abort": {
+      "already_configured": "Water Valve Card is already enabled"
+    }
+  }
+}
