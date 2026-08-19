@@ -1,0 +1,8 @@
+{
+  "domain": "smartwatervalve",
+  "name": "Smart Water Valve",
+  "documentation": "https://github.com/kdinya/smart-water-valve",
+  "requirements": [],
+  "codeowners": ["@kdinya"],
+  "version": "1.1.0"
+}

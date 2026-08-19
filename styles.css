@@ -1,0 +1,17 @@
+.card {
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--card-background-color, #fff);
+  box-shadow: var(--ha-card-box-shadow, 0 2px 4px rgba(0,0,0,0.2));
+}
+
+.button {
+  display: inline-block;
+  padding: 8px 16px;
+  margin-top: 12px;
+  border-radius: 8px;
+  background: var(--primary-color, #2196f3);
+  color: #fff;
+  cursor: pointer;
+  text-align: center;
+}
