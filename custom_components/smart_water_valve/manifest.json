@@ -1,0 +1,10 @@
+{
+  "domain": "smart_water_valve",
+  "name": "Water Valve Card",
+  "codeowners": ["@kdinya"],
+  "documentation": "https://github.com/kdinya/smart-water-valve",
+  "issue_tracker": "https://github.com/kdinya/smart-water-valve/issues",
+  "requirements": [],
+  "version": "3.4.0",
+  "iot_class": "calculated"
+}

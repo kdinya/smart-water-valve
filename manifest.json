@@ -1,0 +1,7 @@
+{
+  "domain": "smart_water_valve",
+  "name": "Water Valve Card",
+  "version": "3.4.0",
+  "documentation": "https://github.com/kdinya/smart-water-valve",
+  "codeowners": ["@kdinya"]
+}
