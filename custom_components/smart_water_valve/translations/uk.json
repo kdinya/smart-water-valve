@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Water Valve Card",
+        "description": "Додає лише Lovelace-картку. Пристрої не створюються. Після підтвердження оновіть браузер (Ctrl+F5) і додайте картку на дашборд."
+      }
+    },
+    "abort": {
+      "already_configured": "Water Valve Card уже увімкнено"
+    }
+  }
+}

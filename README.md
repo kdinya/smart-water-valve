@@ -1,36 +1,25 @@
 # Water Valve Card
 
-Lovelace card for controlling a water valve with optional leak sensors.
+Lovelace card for a water valve. **Install via HACS — no manual file copy to `/local/`.**
 
-**Install once via HACS — the card JS is registered automatically. No copying to `/local/`.**
+## Install
 
-## Install (recommended)
-
-1. **HACS → Integrations** (not Frontend)
-2. **⋮ → Custom repositories**
-   - URL: `https://github.com/kdinya/smart-water-valve`
-   - Category: **Integration**
+1. **HACS → Integrations**
+2. Custom repositories → `https://github.com/kdinya/smart-water-valve` → **Integration**
 3. Download **Water Valve Card**
 4. **Restart Home Assistant**
-5. Hard refresh the browser (**Ctrl+F5**)
+5. **Settings → Devices & services → Add integration → Water Valve Card** → Submit  
+   (only enables the card; no entities to choose)
+6. Browser **Ctrl+F5**
+7. Dashboard → Add card → **Water Valve Card**
 
-The integration only loads the card. It does **not** create devices.
+### Remove old `/local/` setup
 
-### Remove old manual resource (important)
+1. Settings → Dashboards → Resources → delete `/local/water-valve-card.js`
+2. You can delete `config/www/water-valve-card.js` if it exists
+3. Restart + Ctrl+F5
 
-If you previously used `/local/water-valve-card.js`:
-
-1. **Settings → Dashboards → Resources**
-2. Delete `/local/water-valve-card.js`
-3. Restart HA → Ctrl+F5
-
-The card is now served from: `/smart_water_valve/water-valve-card.js`
-
-## Add the card
-
-Dashboard → Add card → **Water Valve Card**
-
-Default config (no entities):
+## Card defaults
 
 ```yaml
 type: custom:water-valve-card
@@ -38,14 +27,7 @@ language: uk
 name: Smart Water Valve
 ```
 
-### Visual editor
-
-- Language: uk / ru / en  
-- Valve entity (required)  
-- Optional state sensor  
-- Up to 2 leak sensors + custom names (both needed to show)  
-- Battery (optional)  
-- Animation duration (ms) + auto-measure  
+No entities until you pick them in the visual editor.
 
 ## Version
 
