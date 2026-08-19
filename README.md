@@ -1,31 +1,34 @@
 # Water Valve Card
 
-Home Assistant Lovelace card. **On install/update the integration registers the correct Lovelace resource automatically** (versioned URL).
+Home Assistant custom **integration** that registers a Lovelace card automatically.
 
-## Install
+## HACS install (important)
 
-1. **HACS → Integrations** → Custom repositories  
-   `https://github.com/kdinya/smart-water-valve` → **Integration**
+| Field | Value |
+|--------|--------|
+| Repository | `https://github.com/kdinya/smart-water-valve` |
+| **Category** | **Integration** (not Frontend / Plugin) |
+
+If HACS says `Repository structure is not compliant` you selected **Plugin**. Use **Integration**.
+
+### Steps
+
+1. HACS → Integrations → ⋮ → Custom repositories → URL above → **Integration**
 2. Download **Water Valve Card**
 3. **Restart Home Assistant**
-4. **Settings → Devices & services → Add integration → Water Valve Card**
-5. Hard refresh browser (**Ctrl+F5**)
+4. Settings → Devices & services → Add integration → **Water Valve Card**
+5. Browser **Ctrl+F5**
+6. Console must show: `WATER-VALVE-CARD 3.6.1`
 
-### What happens automatically
+### Resource
 
-- JS is served from `/smart_water_valve/water-valve-card.js`
-- Lovelace resource is created/updated to  
-  `/smart_water_valve/water-valve-card.js?v=3.6.0`
-- Conflicting `/local/water-valve-card.js` resources are **removed**
-- After HACS update + restart, the resource URL version changes so the browser loads the new file
+After restart the card is loaded from:
 
-### First time after old manual install
+`/smart_water_valve/water-valve-card.js?v=3.6.1`
 
-Restart HA once so the integration can delete the old `/local/` resource. Then Ctrl+F5.
+If you use **YAML** lovelace resources, remove any line with `/local/water-valve-card.js` manually (storage mode removes it automatically).
 
-## Add card
-
-Dashboard → Add card → **Water Valve Card**
+## Card
 
 ```yaml
 type: custom:water-valve-card
@@ -33,8 +36,8 @@ language: uk
 name: Smart Water Valve
 ```
 
-Visual editor: language, valve entity, optional leaks + names, animation timing.
+Visual editor: language, valve, optional leak sensors + names, animation timing.
 
 ## Version
 
-**3.6.0**
+**3.6.1**

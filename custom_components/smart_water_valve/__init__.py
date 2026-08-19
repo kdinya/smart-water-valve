@@ -1,4 +1,4 @@
-"""Water Valve Card — serves JS and registers Lovelace resource automatically."""
+"""Water Valve Card — serves JS and registers Lovelace resource on install/update."""
 from __future__ import annotations
 
 import logging
@@ -17,11 +17,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def _async_register_static_path(hass: HomeAssistant) -> None:
-    """Serve custom_components/.../water-valve-card.js at /smart_water_valve/."""
     hass.data.setdefault(DOMAIN, {})
     if hass.data[DOMAIN].get("static_registered"):
         return
-
     root = Path(__file__).parent
     await hass.http.async_register_static_paths(
         [
@@ -33,34 +31,42 @@ async def _async_register_static_path(hass: HomeAssistant) -> None:
         ]
     )
     hass.data[DOMAIN]["static_registered"] = True
-    _LOGGER.debug("Static path registered for %s", DOMAIN)
+    _LOGGER.info(
+        "Serving Water Valve Card v%s from %s",
+        VERSION,
+        root / "water-valve-card.js",
+    )
 
 
 def _inject_js(hass: HomeAssistant) -> None:
-    """Inject module into frontend (works even without lovelace resource entry)."""
     hass.data.setdefault(DOMAIN, {})
-    prev = hass.data[DOMAIN].get("injected_url")
-    if prev == CARD_URL:
+    if hass.data[DOMAIN].get("injected_url") == CARD_URL:
         return
     add_extra_js_url(hass, CARD_URL)
     hass.data[DOMAIN]["injected_url"] = CARD_URL
-    _LOGGER.info("Frontend JS injected: %s", CARD_URL)
+    _LOGGER.info("Injected frontend module: %s", CARD_URL)
 
 
 async def _async_sync_lovelace_resource(hass: HomeAssistant) -> None:
-    """Create/update Lovelace resource to the current versioned URL; remove /local/ conflicts."""
+    """Register/update storage-mode resource; warn clearly in YAML mode."""
     lovelace = hass.data.get("lovelace")
     if lovelace is None:
-        _LOGGER.debug("Lovelace not loaded yet")
+        _LOGGER.debug("Lovelace not ready")
         return
 
     resources = lovelace.get("resources")
     if resources is None:
         return
 
-    # YAML mode has no async_create_item
     if not hasattr(resources, "async_items"):
-        _LOGGER.debug("Lovelace resources in YAML mode — using add_extra_js_url only")
+        _LOGGER.warning(
+            "Lovelace resources are in YAML mode — cannot auto-add/remove resources. "
+            "JS is still injected via add_extra_js_url (%s). "
+            "If the card is old or has no visual editor, remove any "
+            "'/local/water-valve-card.js' lines from your lovelace resources in YAML, "
+            "then restart and Ctrl+F5.",
+            CARD_URL,
+        )
         return
 
     try:
@@ -77,56 +83,41 @@ async def _async_sync_lovelace_resource(hass: HomeAssistant) -> None:
         item_id = item.get("id")
         if not item_id:
             continue
-        # Remove manual /local copies that shadow the integration card
         if url.startswith("/local/water-valve-card.js"):
             to_delete.append(item_id)
-            _LOGGER.info("Removing conflicting resource: %s", url)
             continue
-        # Our resource (any old version query string)
-        if url.startswith(CARD_URL_PREFIX) or url.startswith(f"/hacsfiles/{DOMAIN}/"):
+        if url.startswith(CARD_URL_PREFIX) or f"/{DOMAIN}/" in url:
             existing_id = item_id
 
     for item_id in to_delete:
         try:
             await resources.async_delete_item(item_id)
+            _LOGGER.info("Removed conflicting /local/water-valve-card.js resource")
         except Exception as err:  # noqa: BLE001
-            _LOGGER.warning("Failed to delete resource %s: %s", item_id, err)
+            _LOGGER.warning("Failed deleting resource %s: %s", item_id, err)
 
-    payload = {"res_type": "module", "url": CARD_URL}
-
-    try:
-        if existing_id:
-            await resources.async_update_item(existing_id, payload)
-            _LOGGER.info("Lovelace resource updated to %s", CARD_URL)
-        else:
-            await resources.async_create_item(payload)
-            _LOGGER.info("Lovelace resource created: %s", CARD_URL)
-    except Exception as err:  # noqa: BLE001
-        # Fallback key name used by some HA versions
+    for payload in (
+        {"res_type": "module", "url": CARD_URL},
+        {"type": "module", "url": CARD_URL},
+    ):
         try:
-            payload_alt = {"type": "module", "url": CARD_URL}
             if existing_id:
-                await resources.async_update_item(existing_id, payload_alt)
+                await resources.async_update_item(existing_id, payload)
+                _LOGGER.info("Updated Lovelace resource → %s", CARD_URL)
             else:
-                await resources.async_create_item(payload_alt)
-            _LOGGER.info("Lovelace resource registered (alt schema): %s", CARD_URL)
-        except Exception as err2:  # noqa: BLE001
-            _LOGGER.warning(
-                "Could not write lovelace resource (JS still injected via add_extra_js_url): %s / %s",
-                err,
-                err2,
-            )
+                await resources.async_create_item(payload)
+                _LOGGER.info("Created Lovelace resource → %s", CARD_URL)
+            return
+        except Exception:  # noqa: BLE001
+            continue
 
-
-async def _async_register_frontend(hass: HomeAssistant) -> None:
-    """Full frontend registration for current VERSION."""
-    await _async_register_static_path(hass)
-    _inject_js(hass)
-    await _async_sync_lovelace_resource(hass)
+    _LOGGER.warning(
+        "Could not write Lovelace resource entry; module still injected as %s",
+        CARD_URL,
+    )
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up from configuration.yaml (optional)."""
     await _async_register_static_path(hass)
     _inject_js(hass)
 
@@ -141,7 +132,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Enable card when integration entry is added/reloaded."""
     await _async_register_static_path(hass)
     _inject_js(hass)
 
@@ -153,16 +143,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _started)
 
-    # Also sync on entry update (version bump after HACS update + reload)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Re-sync resource URL after integration update."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload — leave resource (safe); next setup refreshes version."""
     return True

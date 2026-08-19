@@ -1,6 +1,6 @@
 """Constants."""
 DOMAIN = "smart_water_valve"
-VERSION = "3.6.0"
+VERSION = "3.6.1"
 CARD_FILENAME = "water-valve-card.js"
 CARD_URL = f"/{DOMAIN}/{CARD_FILENAME}?v={VERSION}"
 CARD_URL_PREFIX = f"/{DOMAIN}/{CARD_FILENAME}"
