@@ -1,19 +1,21 @@
 
-/* early registration for card picker */
+/* early registration for card picker — the card renders a safe empty
+   state (name + status only) when hass/config/switch_entity aren't set
+   yet, so the live preview thumbnail is safe to show. */
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "water-valve-card")) {
   window.customCards.push({
     type: "water-valve-card",
     name: "Water Valve Card",
-    preview: false,
+    preview: true,
     description: "Smart water valve / Водяний кран",
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 4.0.1 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 4.1.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v4.0.1 — труби з водою на всю ширину,
+//  Water Valve Card  v4.1.0 — труби з водою на всю ширину,
 //  центральний корпус фіксований (max-width:400px, центрований).
 // ═══════════════════════════════════════════════════════════════
 
@@ -463,10 +465,25 @@ class WaterValveCard extends HTMLElement {
     if (this._initialized) {
       this._attachEvents();
       this._startWaterAnimation();
+      // Force a fresh render in case state changed (or a pending toggle
+      // was cancelled) while the card was detached from the DOM.
+      this._lastKey = '';
+      this._render();
     }
   }
   disconnectedCallback() {
-    if (this._toggleTimeout) clearTimeout(this._toggleTimeout);
+    if (this._toggleTimeout) {
+      clearTimeout(this._toggleTimeout);
+      this._toggleTimeout = null;
+    }
+    // Don't leave the card permanently stuck showing "opening…/closing…":
+    // if it's reattached later, re-render from the real hass state instead.
+    this._isToggling = false;
+    this._targetState = null;
+    if (this._measureUnsub) {
+      this._measureUnsub();
+      this._measureUnsub = null;
+    }
     this._detachEvents();
     this._stopWaterAnimation();
   }
@@ -508,12 +525,13 @@ class WaterValveCard extends HTMLElement {
     const { isOpen } = this._getValveState();
     this._isToggling = true;
     this._targetState = isOpen ? 'closed' : 'open';
-    const service = isOpen ? 'turn_off' : 'turn_on';
     const domain = switch_entity.split('.')[0] || 'switch';
-    const svc = domain === 'valve'
-      ? (isOpen ? 'close' : 'open')
-      : service;
-    this._hass.callService(domain === 'valve' ? 'valve' : 'switch', svc, { entity_id: switch_entity });
+    const isValveDomain = domain === 'valve';
+    // The `valve` domain uses open_valve/close_valve, not open/close.
+    const svc = isValveDomain
+      ? (isOpen ? 'close_valve' : 'open_valve')
+      : (isOpen ? 'turn_off' : 'turn_on');
+    this._hass.callService(isValveDomain ? 'valve' : 'switch', svc, { entity_id: switch_entity });
 
     this._startAutoMeasure(!isOpen);
 
@@ -1280,8 +1298,10 @@ class WaterValveCard extends HTMLElement {
       }
     }
 
-    this._updateSensor(r, 'bath', cfg.bathroom_label, d.bathLeak, this._t('text_dry'), this._t('text_leak'), cfg.bathroom_leak_entity && cfg.bathroom_label ? cfg.bathroom_leak_entity : null);
-    this._updateSensor(r, 'kitchen', cfg.kitchen_label, d.kitLeak, this._t('text_dry'), this._t('text_leak'), cfg.kitchen_leak_entity && cfg.kitchen_label ? cfg.kitchen_leak_entity : null);
+    const textDry = cfg.text_dry || this._t('text_dry');
+    const textLeak = cfg.text_leak || this._t('text_leak');
+    this._updateSensor(r, 'bath', cfg.bathroom_label, d.bathLeak, textDry, textLeak, cfg.bathroom_leak_entity && cfg.bathroom_label ? cfg.bathroom_leak_entity : null);
+    this._updateSensor(r, 'kitchen', cfg.kitchen_label, d.kitLeak, textDry, textLeak, cfg.kitchen_leak_entity && cfg.kitchen_label ? cfg.kitchen_leak_entity : null);
 
     const btn = r.getElementById('action-btn');
     btn.classList.toggle('disabled', this._isToggling);
@@ -1291,9 +1311,9 @@ class WaterValveCard extends HTMLElement {
     if (this._isToggling) {
       btn.textContent = this._targetState === 'open' ? this._t('opening_btn') : this._t('closing_btn');
     } else if (isOpen) {
-      btn.textContent = this._t('btn_close');
+      btn.textContent = cfg.btn_close || this._t('btn_close');
     } else {
-      btn.textContent = this._t('btn_open');
+      btn.textContent = cfg.btn_open || this._t('btn_open');
     }
   }
 
@@ -1365,10 +1385,16 @@ class WaterValveCardEditor extends HTMLElement {
           },
         },
       },
-      { name: "name", label: "Card name / Назва", selector: { text: {} } },
+      {
+        name: "name",
+        label: "Card name / Назва",
+        required: true,
+        selector: { text: {} },
+      },
       {
         name: "switch_entity",
         label: "Valve / switch (required)",
+        required: true,
         selector: { entity: { domain: ["switch", "valve"] } },
       },
       {
@@ -1402,6 +1428,26 @@ class WaterValveCardEditor extends HTMLElement {
         selector: { entity: { domain: "sensor" } },
       },
       {
+        name: "text_dry",
+        label: "Text when dry (optional, overrides language)",
+        selector: { text: {} },
+      },
+      {
+        name: "text_leak",
+        label: "Text when leaking (optional, overrides language)",
+        selector: { text: {} },
+      },
+      {
+        name: "btn_open",
+        label: "Open button text (optional, overrides language)",
+        selector: { text: {} },
+      },
+      {
+        name: "btn_close",
+        label: "Close button text (optional, overrides language)",
+        selector: { text: {} },
+      },
+      {
         name: "toggle_lock_ms",
         label: "Animation time (ms)",
         selector: {
@@ -1426,6 +1472,10 @@ class WaterValveCardEditor extends HTMLElement {
       "kitchen_leak_entity",
       "bathroom_label",
       "kitchen_label",
+      "text_dry",
+      "text_leak",
+      "btn_open",
+      "btn_close",
     ].forEach((k) => {
       if (out[k] === "" || out[k] === null || out[k] === undefined) delete out[k];
     });
@@ -1469,6 +1519,10 @@ class WaterValveCardEditor extends HTMLElement {
       kitchen_leak_entity: c.kitchen_leak_entity || "",
       kitchen_label: c.kitchen_label || "",
       kran_battery_entity: c.kran_battery_entity || "",
+      text_dry: c.text_dry || "",
+      text_leak: c.text_leak || "",
+      btn_open: c.btn_open || "",
+      btn_close: c.btn_close || "",
       toggle_lock_ms: c.toggle_lock_ms ?? 8000,
       auto_toggle_duration: !!c.auto_toggle_duration,
     };
@@ -1511,13 +1565,13 @@ window.customCards = window.customCards.filter((c) => c.type !== "water-valve-ca
 window.customCards.push({
   type: "water-valve-card",
   name: "Water Valve Card",
-  preview: false,
+  preview: true,
   description: "Smart water valve / Водяний кран — language, leaks, animation.",
   documentationURL: "https://github.com/kdinya/smart-water-valve",
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 4.0.1 ",
+  "%c WATER-VALVE-CARD %c 4.1.0 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );

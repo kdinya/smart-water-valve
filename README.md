@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, a battery indicator and full UK/RU/EN localization.
 
-Current version: **v4.0.1**.
+Current version: **v4.1.0**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -64,7 +64,7 @@ The card is a self-contained visual control for a water valve actuator:
 4. Find **Water Valve Card** in the list and click **Download**.
 5. Make sure the resource `water-valve-card.js` was added automatically under **Settings → Dashboards → ⋮ → Resources** (HACS does this for you).
 6. Hard-refresh your browser (**Ctrl+F5** / **Cmd+Shift+R**) so the new JavaScript is loaded, not a cached copy.
-7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.0.1` log line — this confirms the right version is active.
+7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.1.0` log line — this confirms the right version is active.
 
 ### Manual installation
 
@@ -163,6 +163,16 @@ switch_entity: switch.water_valve
 - The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed.
 - If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **both** leak sensors are triggered simultaneously, the status text reflects that explicitly.
 - The **battery indicator** shows the numeric value from `kran_battery_entity` with a small level bar; it's hidden entirely if you don't configure a battery entity.
+
+## Changelog
+
+### v4.1.0
+
+- **Fixed:** toggling a `valve`-domain entity called the wrong services (`valve.open`/`valve.close`, which don't exist) — now correctly calls `valve.open_valve`/`valve.close_valve`. `switch`-domain entities were never affected.
+- **Fixed:** if the card was detached from the DOM mid-toggle (e.g. you switched dashboard tabs while the valve was opening/closing), it could get permanently stuck showing "opening…/closing…" until a hard page reload. The card now resets and re-renders from the real entity state when reattached.
+- **Fixed:** `text_dry`, `text_leak`, `btn_open` and `btn_close` were accepted in the config but silently ignored by the renderer (it always used the localized text instead). They now correctly override the localized defaults, and are also exposed in the visual editor.
+- **Changed:** live preview thumbnails are enabled again in the card picker (previously disabled defensively; the card's empty/unconfigured state was already safe to render).
+- **Changed:** `name` and the valve entity are now marked as required fields in the visual editor.
 
 ## Troubleshooting
 
