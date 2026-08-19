@@ -1,0 +1,7 @@
+{
+  "name": "Water Valve Card",
+  "filename": "water-valve-card.js",
+  "content_in_root": true,
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
+}
