@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, a battery indicator and full UK/RU/EN localization.
 
-Current version: **v4.1.0**. See [Changelog](#changelog) for what's new.
+Current version: **v4.3.0**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -37,8 +37,8 @@ Current version: **v4.1.0**. See [Changelog](#changelog) for what's new.
 The card is a self-contained visual control for a water valve actuator:
 
 - Renders two full-width animated pipes with flowing water, bubbles, glass reflections and a lever that smoothly animates when the valve opens/closes.
-- Tapping the card toggles the valve (calls `switch.toggle` / `valve` service on your configured entity) and shows an "opening…"/"closing…" transitional state while the action is in progress, based on a configurable (or auto-measured) timing.
-- Displays up to **two independently labeled leak sensors** (e.g. "Bathroom" / "Kitchen", or anything you name them), each shown as DRY/LEAK with an icon that changes color and pulses on leak.
+- Tapping the **action button** (not the rest of the card) toggles the valve and shows an "opening…"/"closing…" transitional state while the action is in progress, based on a configurable (or auto-measured) timing.
+- Displays up to **two independent leak sensors** (e.g. "Bathroom" / "Kitchen", or anything you name them), each shown as DRY/LEAK with an icon that changes color and pulses on leak.
 - Shows a battery level for the valve actuator, if you provide a battery sensor.
 - Switches into a visual emergency state (red glowing border, pulsing "leak" indicator, animated leak drops, pulsing shut-off button) whenever any configured leak sensor is triggered.
 - Ships with a **visual (UI) editor** — no YAML required to configure it.
@@ -64,7 +64,7 @@ The card is a self-contained visual control for a water valve actuator:
 4. Find **Water Valve Card** in the list and click **Download**.
 5. Make sure the resource `water-valve-card.js` was added automatically under **Settings → Dashboards → ⋮ → Resources** (HACS does this for you).
 6. Hard-refresh your browser (**Ctrl+F5** / **Cmd+Shift+R**) so the new JavaScript is loaded, not a cached copy.
-7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.1.0` log line — this confirms the right version is active.
+7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.3.0` log line — this confirms the right version is active.
 
 ### Manual installation
 
@@ -100,23 +100,23 @@ switch_entity: switch.water_valve
 
 | Parameter | Type | Required | Description | Default |
 |---|---|:---:|---|---|
-| `switch_entity` | `string` (entity id) | ✅ | The `switch` (or `valve`-domain) entity that opens/closes the water valve. Tapping the card calls this entity's toggle service. | — |
+| `switch_entity` | `string` (entity id) | ✅ | The `switch` (or `valve`-domain) entity that opens/closes the water valve. Tapping the action button calls this entity's toggle service. | — |
 | `name` | `string` | ❌ | Card / device title shown at the top. | `"Водяний кран"` / `"Водяной кран"` / `"Water valve"` depending on `language` |
 | `language` | `string`: `uk` \| `ru` \| `en` | ❌ | UI language for every built-in label, status sentence and button text (see [Localization](#localization)). | `uk` |
 | `valve_state_entity` | `string` (entity id) | ❌ | A separate `sensor`/`binary_sensor` reporting the valve's **real physical position** (open/closed), if your hardware reports it independently from the switch command state. | falls back to `switch_entity`'s own state |
 | `kran_battery_entity` | `string` (entity id) | ❌ | A `sensor` entity with the battery level of the valve actuator (numeric, e.g. `%`). | none (battery indicator hidden) |
 | `bathroom_leak_entity` | `string` (entity id) | ❌ | First `binary_sensor` leak/moisture sensor. | none |
-| `bathroom_label` | `string` | ❌ | Display label for the first leak sensor. **Leave empty to hide this leak indicator entirely**, even if an entity is set. | — |
+| `bathroom_label` | `string` | ❌ | Display name for the first leak sensor block. Leave empty to just hide the name text — the block itself still shows as long as `bathroom_leak_entity` is set. | — |
 | `kitchen_leak_entity` | `string` (entity id) | ❌ | Second `binary_sensor` leak/moisture sensor. | none |
-| `kitchen_label` | `string` | ❌ | Display label for the second leak sensor. **Leave empty to hide this leak indicator entirely**, even if an entity is set. | — |
+| `kitchen_label` | `string` | ❌ | Display name for the second leak sensor block. Leave empty to just hide the name text — the block itself still shows as long as `kitchen_leak_entity` is set. | — |
 | `text_dry` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is off (dry). | localized `"СУХО"` / `"DRY"` etc. |
 | `text_leak` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is on (leak). | localized `"ПРОТІЧКА"` / `"LEAK"` etc. |
 | `btn_open` | `string` | ❌ | Label for the open action / state. | localized `"ВІДКРИТИ"` / `"OPEN"` etc. |
 | `btn_close` | `string` | ❌ | Label for the close action / state. | localized `"ПЕРЕКРИТИ"` / `"CLOSE"` etc. |
 | `toggle_lock_ms` | `number` (milliseconds, 500–120000) | ❌ | How long the card shows the transitional "opening…/closing…" state (and blocks re-tapping) after you toggle the valve. Set this to roughly how long your physical actuator takes to fully open/close. | `8000` (8 seconds) |
-| `auto_toggle_duration` | `boolean` | ❌ | If `true`, the card automatically measures how long your actuator actually takes to reach the target state (using `valve_state_entity` or `switch_entity`) and remembers that duration per-browser for next time, instead of using a fixed `toggle_lock_ms`. | `false` |
+| `auto_toggle_duration` | `boolean` | ❌ | If `true`, the card automatically measures how long your actuator actually takes to reach the target state (using `valve_state_entity` or `switch_entity`) and **replaces** `toggle_lock_ms` with that measured value from then on (remembered per-browser), instead of using the fixed manual value. | `false` |
 
-> Both leak sensors are fully independent and optional — set only one, both, or neither. A leak indicator is only rendered if **both** its entity and its label are set (an empty label hides it even with an entity configured, which is handy for temporarily disabling a zone without deleting the entity reference).
+> Both leak sensors are fully independent and optional — set only one, both, or neither. A leak block is shown whenever its entity is configured, regardless of the label. An empty `*_label` only hides the name text inside the block — to hide the block entirely, remove the `*_leak_entity`.
 
 ## Toggle animation timing
 
@@ -159,12 +159,23 @@ switch_entity: switch.water_valve
 
 ## How the card behaves
 
-- **Tap** the card body to toggle the valve. While the actuator is moving (per `toggle_lock_ms` / auto-measured duration), the card shows an "opening…"/"closing…" state and ignores further taps to avoid conflicting commands.
+- **Tap the action button** (not the rest of the card) to toggle the valve. While the actuator is moving (per `toggle_lock_ms` / auto-measured duration), the button shows an "opening…"/"closing…" state and ignores further taps to avoid conflicting commands.
+- If `switch_entity` is unavailable (offline, unloaded integration, etc.), the card shows a distinct **"Unavailable"** state instead of quietly looking closed, and disables the button — a real device problem is never presented as "the water is safely shut off."
+- The water-animation loop pauses automatically when the browser tab is hidden or the card is scrolled off-screen, to save CPU/battery on always-on dashboard panels.
 - The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed.
 - If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **both** leak sensors are triggered simultaneously, the status text reflects that explicitly.
 - The **battery indicator** shows the numeric value from `kran_battery_entity` with a small level bar; it's hidden entirely if you don't configure a battery entity.
 
 ## Changelog
+
+### v4.3.0
+
+- **Fixed:** a failed `switch`/`valve` service call (offline actuator, HA error, etc.) is now caught — the card resets out of the "opening…/closing…" state instead of staying stuck there for the full `toggle_lock_ms` regardless of whether anything actually happened.
+- **Fixed:** an `unavailable` `switch_entity` (or a missing one) used to render as a plain "CLOSED" state, which is misleading for a shut-off valve. It's now shown as a distinct **"Unavailable"** state, and the action button is disabled while it lasts.
+- **Changed:** the valve now toggles **only** by tapping the action button — tapping anywhere else on the card body no longer does anything (previously the whole card was a tap target, which was too easy to trigger by accident).
+- **Changed:** a leak-sensor block is now shown whenever its `*_leak_entity` is configured, independent of the label. `*_label` only controls whether the name text is shown inside the block — it's no longer required to make the block appear.
+- **Changed:** with `auto_toggle_duration: true`, the measured actuator time now fully replaces the manually configured `toggle_lock_ms` once a measurement exists, rather than just being preferred alongside it.
+- **Improved:** the water animation now pauses when the browser tab is hidden or the card scrolls off-screen (via `visibilitychange` + `IntersectionObserver`), instead of rendering forever in the background — meaningfully lighter on always-on dashboard tablets.
 
 ### v4.1.0
 
@@ -181,7 +192,8 @@ switch_entity: switch.water_valve
 | Card doesn't appear when searching "Water Valve" in **Add card** | The JavaScript resource isn't loaded. Check **Settings → Dashboards → Resources** for `water-valve-card.js` (type must be **JavaScript Module**), then hard-refresh (**Ctrl+F5**). |
 | Browser console doesn't show a `WATER-VALVE-CARD` / version log line | The old cached file is still being served. Clear the browser cache, bump the resource URL with a `?v=...` query string, or remove and re-add the resource. |
 | Card shows a config error about a missing entity | `switch_entity` isn't set — it's the only required field. |
-| A leak indicator doesn't show even though I set the entity | Make sure you also set the matching `*_label` field — a leak indicator only renders when **both** its entity and label are present. |
+| A leak indicator doesn't show even though I set the entity | Since v4.3.0 this shouldn't happen — the block shows whenever the entity is set, label or not. If it's still missing, double-check the entity id is spelled correctly in the config. |
+| Tapping the card body does nothing | Expected since v4.3.0 — only the action button toggles the valve now, to avoid accidental taps. |
 | Leak indicator doesn't visually flip to LEAK | Confirm the `binary_sensor` actually reports state `on` (not `unavailable`/`unknown`) — moisture/problem `device_class` sensors work best. |
 | Valve toggles but the card gets "stuck" showing opening/closing | `toggle_lock_ms` is probably shorter/longer than your actuator's real travel time — either adjust it manually or enable `auto_toggle_duration`. |
 | Old manual install conflicts with a new HACS install | Remove the old `/local/water-valve-card.js` resource entry (manual install) if you switch to installing via HACS, to avoid two versions being registered. |

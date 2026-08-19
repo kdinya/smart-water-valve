@@ -12,10 +12,10 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 4.1.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 4.3.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v4.1.0 — труби з водою на всю ширину,
+//  Water Valve Card  v4.3.0 — труби з водою на всю ширину,
 //  центральний корпус фіксований (max-width:400px, центрований).
 // ═══════════════════════════════════════════════════════════════
 
@@ -31,6 +31,9 @@ class WaterValveCard extends HTMLElement {
     this._initialized = false;
     this._eventsAC = null;
     this._lastKey = '';
+    this._io = null;
+    this._isIntersecting = true;
+    this._visibilityHandler = null;
 
     // ── Анімація води ──
     this._waterAnimationId = null;
@@ -85,7 +88,6 @@ class WaterValveCard extends HTMLElement {
       overflow: hidden;
       border-radius: 28px;
       padding: 16px 20px 14px;
-      cursor: pointer;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
       border: 1px solid rgba(255,255,255,0.05);
@@ -95,10 +97,9 @@ class WaterValveCard extends HTMLElement {
       box-shadow:
         0 30px 70px rgba(0,0,0,0.9),
         inset 0 1px 0 rgba(255,255,255,0.06);
-      transition: border-color 0.6s ease, box-shadow 0.6s ease, transform 0.15s ease;
+      transition: border-color 0.6s ease, box-shadow 0.6s ease;
     }
-    .card:active:not(.disabled-card) { transform: scale(0.985); }
-    .card.disabled-card { cursor: not-allowed; }
+    /* Card body itself is no longer a tap target — only .action-btn is. */
 
     .card.has-leak {
       border-color: rgba(239,68,68,0.5);
@@ -296,6 +297,7 @@ class WaterValveCard extends HTMLElement {
         open: 'ВІДКРИТО',
         closed: 'ЗАКРИТО',
         unknown: 'НЕВІДОМО',
+        unavailable: 'НЕДОСТУПНО',
         leak: 'ПРОТІЧКА!',
         opening: 'ВІДКРИВАЄТЬСЯ',
         closing: 'ЗАКРИВАЄТЬСЯ',
@@ -308,6 +310,7 @@ class WaterValveCard extends HTMLElement {
         status_open: 'Система активна, тиск стабільний',
         status_closed: 'Подачу води повністю заблоковано приводом',
         status_unknown: 'Стан запірного клапана не визначено',
+        status_unavailable: 'Пристрій недоступний — перевірте з\'єднання',
         status_opening: 'Привід рівномірно повертає затвор магістралі',
         status_closing: 'Електропривід виконує планове відсікання потоку',
         status_leak_both: 'Аварія: витік на обох датчиках!',
@@ -319,6 +322,7 @@ class WaterValveCard extends HTMLElement {
         open: 'ОТКРЫТО',
         closed: 'ЗАКРЫТО',
         unknown: 'НЕИЗВЕСТНО',
+        unavailable: 'НЕДОСТУПНО',
         leak: 'ПРОТЕЧКА!',
         opening: 'ОТКРЫВАЕТСЯ',
         closing: 'ЗАКРЫВАЕТСЯ',
@@ -331,6 +335,7 @@ class WaterValveCard extends HTMLElement {
         status_open: 'Система активна, давление стабильное',
         status_closed: 'Подача воды полностью перекрыта приводом',
         status_unknown: 'Состояние запорного клапана не определено',
+        status_unavailable: 'Устройство недоступно — проверьте соединение',
         status_opening: 'Привод равномерно открывает магистраль',
         status_closing: 'Электропривод выполняет плановое отсечение потока',
         status_leak_both: 'Авария: утечка на обоих датчиках!',
@@ -342,6 +347,7 @@ class WaterValveCard extends HTMLElement {
         open: 'OPEN',
         closed: 'CLOSED',
         unknown: 'UNKNOWN',
+        unavailable: 'UNAVAILABLE',
         leak: 'LEAK!',
         opening: 'OPENING',
         closing: 'CLOSING',
@@ -354,6 +360,7 @@ class WaterValveCard extends HTMLElement {
         status_open: 'System active, pressure stable',
         status_closed: 'Water supply fully shut off by actuator',
         status_unknown: 'Valve position is unknown',
+        status_unavailable: 'Device is unavailable — check the connection',
         status_opening: 'Actuator is opening the valve',
         status_closing: 'Actuator is closing the valve',
         status_leak_both: 'Emergency: leak on both sensors!',
@@ -376,6 +383,9 @@ class WaterValveCard extends HTMLElement {
   }
 
   _getToggleMs() {
+    // While auto_toggle_duration is on, a real measured value (once we have
+    // one) always wins over the manually configured toggle_lock_ms — it
+    // fully replaces it, not just as a fallback.
     const cfg = this._config || {};
     if (cfg.auto_toggle_duration) {
       try {
@@ -464,7 +474,8 @@ class WaterValveCard extends HTMLElement {
   connectedCallback() {
     if (this._initialized) {
       this._attachEvents();
-      this._startWaterAnimation();
+      this._setupVisibilityHandling();
+      this._syncAnimationState();
       // Force a fresh render in case state changed (or a pending toggle
       // was cancelled) while the card was detached from the DOM.
       this._lastKey = '';
@@ -485,7 +496,52 @@ class WaterValveCard extends HTMLElement {
       this._measureUnsub = null;
     }
     this._detachEvents();
+    this._teardownVisibilityHandling();
     this._stopWaterAnimation();
+  }
+
+  /* ── Пауза анімації, коли вкладка прихована або картка поза екраном:
+     без цього canvas-анімація (бульбашки/течія) малює кадри на 60fps
+     нескінченно, навіть на панелях, де дашборд ніхто не бачить. ── */
+  _setupVisibilityHandling() {
+    this._teardownVisibilityHandling();
+    this._visibilityHandler = () => this._syncAnimationState();
+    document.addEventListener('visibilitychange', this._visibilityHandler);
+
+    if ('IntersectionObserver' in window) {
+      this._io = new IntersectionObserver((entries) => {
+        const entry = entries[entries.length - 1];
+        this._isIntersecting = !!(entry && entry.isIntersecting);
+        this._syncAnimationState();
+      }, { threshold: 0 });
+      const card = this.shadowRoot?.getElementById('card');
+      if (card) this._io.observe(card);
+    } else {
+      this._isIntersecting = true;
+    }
+  }
+
+  _teardownVisibilityHandling() {
+    if (this._io) {
+      this._io.disconnect();
+      this._io = null;
+    }
+    if (this._visibilityHandler) {
+      document.removeEventListener('visibilitychange', this._visibilityHandler);
+      this._visibilityHandler = null;
+    }
+  }
+
+  _syncAnimationState() {
+    const shouldRun =
+      this.isConnected &&
+      document.visibilityState !== 'hidden' &&
+      this._isIntersecting !== false;
+    if (shouldRun) {
+      this._startWaterAnimation();
+    } else {
+      this._stopWaterAnimation();
+    }
   }
   set hass(hass) {
     this._hass = hass;
@@ -496,7 +552,7 @@ class WaterValveCard extends HTMLElement {
   _isLeak(entityId) { if (!entityId) return false; return this._state(entityId) === 'on'; }
 
   _getValveState() {
-    if (!this._hass) return { switchState: 'unknown', valveState: 'unknown', isOpen: false };
+    if (!this._hass) return { switchState: 'unknown', valveState: 'unknown', isOpen: false, isUnavailable: false };
     const { switch_entity, valve_state_entity } = this._config;
     const sw = this._hass.states[switch_entity];
     const vs = valve_state_entity ? this._hass.states[valve_state_entity] : null;
@@ -504,25 +560,47 @@ class WaterValveCard extends HTMLElement {
     const raw = (vs?.state || switchState || 'unknown').toString().toLowerCase().trim();
     const openStates = new Set(['on', 'open', 'opened', 'відкрито', 'открыто', 'відчинено']);
     const isOpen = openStates.has(raw);
-    const valveState = vs?.state || (isOpen ? 'open' : switchState === 'off' ? 'closed' : switchState);
-    return { switchState, valveState, isOpen };
+    // A missing entity or a state of "unavailable"/"" must NOT be treated as
+    // "closed" — for a water shut-off valve that's actively misleading.
+    const isUnavailable = !sw || raw === 'unavailable' || raw === '';
+    const valveState = isUnavailable
+      ? 'unavailable'
+      : (vs?.state || (isOpen ? 'open' : switchState === 'off' ? 'closed' : switchState));
+    return { switchState, valveState, isOpen, isUnavailable };
   }
 
   _getData() {
-    const { valveState } = this._getValveState();
+    const { valveState, isUnavailable } = this._getValveState();
     const cfg = this._config;
-    const bathEnabled = !!(cfg.bathroom_leak_entity && cfg.bathroom_label);
-    const kitEnabled = !!(cfg.kitchen_leak_entity && cfg.kitchen_label);
+    // Visibility of a leak-sensor block depends ONLY on whether an entity is
+    // configured. The label is a separate, purely cosmetic concern — if it's
+    // empty we just hide the label text and keep showing the block.
+    const bathEnabled = !!cfg.bathroom_leak_entity;
+    const kitEnabled = !!cfg.kitchen_leak_entity;
     const bathLeak = bathEnabled && this._isLeak(cfg.bathroom_leak_entity);
     const kitLeak  = kitEnabled && this._isLeak(cfg.kitchen_leak_entity);
-    return { valveState, bathLeak, kitLeak, hasLeak: bathLeak || kitLeak };
+    return { valveState, isUnavailable, bathLeak, kitLeak, hasLeak: bathLeak || kitLeak };
+  }
+
+  _cancelToggle() {
+    if (this._toggleTimeout) {
+      clearTimeout(this._toggleTimeout);
+      this._toggleTimeout = null;
+    }
+    this._isToggling = false;
+    this._targetState = null;
+    this._lastKey = '';
+    this._render();
   }
 
   _toggle() {
     if (this._isToggling) return;
     const { switch_entity } = this._config;
     if (!switch_entity || !this._hass) return;
-    const { isOpen } = this._getValveState();
+    const { isOpen, isUnavailable } = this._getValveState();
+    // Nothing sensible to do if the actuator isn't there / isn't reporting —
+    // calling a service on it would just fail silently.
+    if (isUnavailable) return;
     this._isToggling = true;
     this._targetState = isOpen ? 'closed' : 'open';
     const domain = switch_entity.split('.')[0] || 'switch';
@@ -531,7 +609,21 @@ class WaterValveCard extends HTMLElement {
     const svc = isValveDomain
       ? (isOpen ? 'close_valve' : 'open_valve')
       : (isOpen ? 'turn_off' : 'turn_on');
-    this._hass.callService(isValveDomain ? 'valve' : 'switch', svc, { entity_id: switch_entity });
+
+    let callResult;
+    try {
+      callResult = this._hass.callService(isValveDomain ? 'valve' : 'switch', svc, { entity_id: switch_entity });
+    } catch (e) {
+      console.error('[water-valve-card] callService threw synchronously', e);
+      this._cancelToggle();
+      return;
+    }
+    if (callResult && typeof callResult.catch === 'function') {
+      callResult.catch((err) => {
+        console.error('[water-valve-card] service call failed — resetting toggle state', err);
+        this._cancelToggle();
+      });
+    }
 
     this._startAutoMeasure(!isOpen);
 
@@ -720,7 +812,8 @@ class WaterValveCard extends HTMLElement {
     this._ctx = this._canvas.getContext('2d');
     this._initWaterEffects();
     this._attachEvents();
-    this._startWaterAnimation();
+    this._setupVisibilityHandling();
+    this._syncAnimationState();
   }
 
   static _dropIcon(uid, fillColor, strokeColor) {
@@ -758,7 +851,8 @@ class WaterValveCard extends HTMLElement {
       this._toggle();
     };
 
-    card.addEventListener('click', onAction, { signal: sig });
+    // Only the button toggles the valve now — tapping elsewhere on the
+    // card body no longer does anything.
     btn.addEventListener('click', onAction, { signal: sig });
   }
 
@@ -1252,6 +1346,11 @@ class WaterValveCard extends HTMLElement {
     } else if (isOpen) {
       stateLabel = this._t('open'); statusText = this._t('status_open');
       accentColor = '#0ea5e9'; accentGlow = 'rgba(14,165,233,0.4)'; dotColor = '#10b981'; dotClass = 'dot pulse';
+    } else if (d.isUnavailable) {
+      // Distinct from "closed" on purpose: an unavailable actuator is NOT
+      // a confirmed-safe state and must not look like one.
+      stateLabel = this._t('unavailable'); statusText = this._t('status_unavailable');
+      accentColor = '#6b7280'; accentGlow = 'rgba(107,114,128,0.15)'; dotColor = '#6b7280'; dotClass = 'dot blink';
     } else if (d.valveState === 'unknown') {
       stateLabel = this._t('unknown'); statusText = this._t('status_unknown');
       accentColor = '#6b7280'; accentGlow = 'rgba(107,114,128,0.15)'; dotColor = '#6b7280'; dotClass = 'dot';
@@ -1260,7 +1359,8 @@ class WaterValveCard extends HTMLElement {
       accentColor = '#dc2626'; accentGlow = 'rgba(220,38,38,0.35)'; dotColor = '#dc2626'; dotClass = 'dot';
     }
 
-    rotation = isOpen ? '0deg' : ((d.valveState === 'unknown' && !this._isToggling) ? '45deg' : '90deg');
+    const isAmbiguous = d.valveState === 'unknown' || d.isUnavailable;
+    rotation = isOpen ? '0deg' : ((isAmbiguous && !this._isToggling) ? '45deg' : '90deg');
 
     card.style.setProperty('--accent-color', accentColor);
     card.style.setProperty('--accent-glow', accentGlow);
@@ -1300,16 +1400,20 @@ class WaterValveCard extends HTMLElement {
 
     const textDry = cfg.text_dry || this._t('text_dry');
     const textLeak = cfg.text_leak || this._t('text_leak');
-    this._updateSensor(r, 'bath', cfg.bathroom_label, d.bathLeak, textDry, textLeak, cfg.bathroom_leak_entity && cfg.bathroom_label ? cfg.bathroom_leak_entity : null);
-    this._updateSensor(r, 'kitchen', cfg.kitchen_label, d.kitLeak, textDry, textLeak, cfg.kitchen_leak_entity && cfg.kitchen_label ? cfg.kitchen_leak_entity : null);
+    // Block visibility is gated by the entity only — label presence just
+    // controls whether the name text is shown.
+    this._updateSensor(r, 'bath', cfg.bathroom_label, d.bathLeak, textDry, textLeak, cfg.bathroom_leak_entity || null);
+    this._updateSensor(r, 'kitchen', cfg.kitchen_label, d.kitLeak, textDry, textLeak, cfg.kitchen_leak_entity || null);
 
     const btn = r.getElementById('action-btn');
-    btn.classList.toggle('disabled', this._isToggling);
+    btn.classList.toggle('disabled', this._isToggling || d.isUnavailable);
     btn.classList.toggle('closed', !isOpen);
     btn.classList.toggle('leak-shut', d.hasLeak && isOpen);
 
     if (this._isToggling) {
       btn.textContent = this._targetState === 'open' ? this._t('opening_btn') : this._t('closing_btn');
+    } else if (d.isUnavailable) {
+      btn.textContent = this._t('unavailable');
     } else if (isOpen) {
       btn.textContent = cfg.btn_close || this._t('btn_close');
     } else {
@@ -1320,6 +1424,8 @@ class WaterValveCard extends HTMLElement {
   _updateSensor(root, id, label, isLeak, textDry, textLeak, entityId) {
     const el = root.getElementById(`sensor-${id}`);
     if (!el) return;
+    // Visibility of the whole block depends only on whether an entity is
+    // configured — an empty label no longer hides it.
     if (!entityId) {
       el.style.display = 'none';
       return;
@@ -1327,7 +1433,12 @@ class WaterValveCard extends HTMLElement {
     el.style.display = '';
     const icon = root.getElementById(`icon-${id}`);
     el.classList.toggle('leak', isLeak);
-    root.getElementById(`label-${id}`).textContent = (label || id).toUpperCase();
+    const labelEl = root.getElementById(`label-${id}`);
+    if (labelEl) {
+      // No label set → just hide the name text, keep the block visible.
+      labelEl.style.display = label ? '' : 'none';
+      labelEl.textContent = label ? label.toUpperCase() : '';
+    }
     root.getElementById(`state-${id}`).textContent = isLeak ? textLeak : textDry;
     const fill = isLeak ? '#ef4444' : '#10b981';
     const stroke = isLeak ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.3)';
@@ -1571,7 +1682,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 4.1.0 ",
+  "%c WATER-VALVE-CARD %c 4.3.0 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
