@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "🚰 Smart Water Valve Setup",
+        "description": "Configure your water valve device",
+        "data": {
+          "name": "Device Name",
+          "switch_entity": "Water Valve Switch",
+          "valve_state_entity": "Valve State Entity (Optional)",
+          "kran_battery_entity": "Battery Sensor",
+          "bathroom_leak_entity": "Bathroom Leak Sensor",
+          "kitchen_leak_entity": "Kitchen Leak Sensor"
+        }
+      },
+      "user_labels": {
+        "title": "Labels & Text",
+        "description": "Customize labels and button text",
+        "data": {
+          "bathroom_label": "Bathroom Label",
+          "kitchen_label": "Kitchen Label",
+          "text_dry": "Text for Dry Status",
+          "text_leak": "Text for Leak Status",
+          "btn_close": "Close Button Text",
+          "btn_open": "Open Button Text"
+        }
+      }
+    }
+  }
+}
