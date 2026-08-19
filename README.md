@@ -1,10 +1,18 @@
-# 🚰 Water Valve Card v1.2.0
+# 🚰 Water Valve Card
 
-Кастомна картка Lovelace для Home Assistant.
+**v2.0.0** — кастомна картка Lovelace для Home Assistant.
 
-**Важливо:** ентіті в картці — це ті, які **ти сам вказуєш** у конфігурації картки (ті самі, що обирав при створенні пристрою / свої реальні ентіті).
+## Встановлення через HACS
 
-## Конфігурація
+1. HACS → **Frontend** (не Integrations!)
+2. ⋮ → Custom repositories
+3. Repository: `https://github.com/kdinya/smart-water-valve`
+4. Category: **Lovelace**
+5. Download → перезавантаж Frontend (Ctrl+F5)
+
+Якщо оновлення не видно: HACS → ⋮ → **Reload data**, потім онови сторінку.
+
+## Конфігурація картки
 
 ```yaml
 type: custom:water-valve-card
@@ -16,24 +24,4 @@ bathroom_leak_entity: binary_sensor.datchik_ppotiechki_vanna_water_leak
 kitchen_leak_entity: binary_sensor.datchik_ppotiechki_kukhnia_water_leak
 ```
 
-| Параметр | Обов’язковий | Опис |
-|----------|--------------|------|
-| `switch_entity` | так | Керування краном (`switch.kran`) |
-| `valve_state_entity` | ні | Стан відкрито/закрито (`sensor.kran_valve_state`) |
-| `kran_battery_entity` | ні | Батарея крана |
-| `bathroom_leak_entity` | ні | Датчик протічки ванної |
-| `kitchen_leak_entity` | ні | Датчик протічки кухні |
-| `name` | ні | Назва на картці |
-
-Підтримувані стани «відкрито»: `on`, `open`, `opened`, `відкрито`, `открыто`.
-
-## Встановлення (HACS)
-
-1. HACS → Frontend → ⋮ → Custom repositories  
-2. URL: `https://github.com/kdinya/smart-water-valve`  
-3. Категорія: **Lovelace**  
-4. Download → перезавантаж Frontend (або Ctrl+F5)
-
-## Оновлення з попередніх версій
-
-Після оновлення **відредагуй картку** і вкажи свої ентіті вручну — більше немає підстановки чужих дефолтів.
+Підстав **свої** entity_id.
