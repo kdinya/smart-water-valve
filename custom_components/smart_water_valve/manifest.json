@@ -2,11 +2,13 @@
   "manifest_version": 2,
   "domain": "smart_water_valve",
   "name": "🚰 Smart Water Valve",
-  "codeowners": ["@kdinya"],
+  "codeowners": [
+    "@kdinya"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/kdinya/smart-water-valve",
   "requirements": [],
-  "version": "1.0.0",
+  "version": "2.0.1",
   "issue_tracker": "https://github.com/kdinya/smart-water-valve/issues",
   "homeassistant": "2024.1.0"
 }
