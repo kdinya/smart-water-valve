@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, a battery indicator and full UK/RU/EN localization.
 
-Current version: **v4.4.0**. See [Changelog](#changelog) for what's new.
+Current version: **v4.5.0**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -68,7 +68,7 @@ The card is a self-contained visual control for a water valve actuator:
 4. Find **Water Valve Card** in the list and click **Download**.
 5. Make sure the resource `water-valve-card.js` was added automatically under **Settings → Dashboards → ⋮ → Resources** (HACS does this for you).
 6. Hard-refresh your browser (**Ctrl+F5** / **Cmd+Shift+R**) so the new JavaScript is loaded, not a cached copy.
-7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.4.0` log line — this confirms the right version is active.
+7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `4.5.0` log line — this confirms the right version is active.
 
 ### Manual installation
 
@@ -159,13 +159,23 @@ switch_entity: switch.water_valve
 ## How the card behaves
 
 - **Press the open/close button** to toggle the valve — tapping the rest of the card does nothing. While the actuator is moving (per `toggle_lock_ms`), the button shows an "opening…"/"closing…" state and is disabled to avoid conflicting commands.
+- **Hold (long-press, ~500ms)** the action button, either leak-sensor block, or the battery indicator to open that entity's more-info dialog. A quick tap still just does its normal thing.
 - The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed.
 - If the valve entity is missing or reports `unavailable`, the card shows a distinct grey **"Unavailable"** state instead of implying the valve is safely closed, and the button is disabled (there's nothing useful to call a service on).
+- When the valve is closed, the card shows the date/time it closed — regardless of what closed it (this card, another dashboard, an automation). It disappears again as soon as the valve is open.
 - If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **both** leak sensors are triggered simultaneously, the status text reflects that explicitly.
 - The **battery indicator** shows the numeric value from `kran_battery_entity` with a small level bar; it's hidden entirely if you don't configure a battery entity.
-- The water/bubble canvas animation automatically pauses when the browser tab is hidden or the card scrolls out of view, and resumes when it's visible again.
+- The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again.
 
 ## Changelog
+
+### v4.5.0
+
+- **Added:** long-press (~500ms hold) on the action button, either leak-sensor block, or the battery indicator now opens that entity's Home Assistant more-info dialog. A regular tap/click still just does its normal thing (toggle, or nothing).
+- **Added:** when the valve becomes closed — from this card, another dashboard, or an automation, it doesn't matter — the card shows the date/time it closed. The moment it's seen open again, the timestamp is cleared. Persisted per-entity, so it survives a page reload.
+- **Fixed:** the "glass pipe" outline and its reflections don't depend on time at all, yet were being fully recomputed (gradients, strokes) on every single animation frame. They're now cached on an offscreen canvas and only redrawn when the card is resized.
+- **Changed:** the card now needs to be at least 30% visible in the viewport (not just barely on-screen) before its animation resumes — mostly-scrolled-off cards stay paused.
+- **Changed:** the visual editor's field labels now follow the selected `language` (Ukrainian / Russian / English) instead of always being in English, and update immediately when you switch the language dropdown — no need to leave and reopen the editor.
 
 ### v4.4.0
 
