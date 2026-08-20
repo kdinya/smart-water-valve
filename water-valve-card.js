@@ -12,11 +12,11 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 4.5.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 5.0.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v4.5.0 — труби з водою на всю ширину,
-//  центральний корпус фіксований (max-width:400px, центрований).
+//  Water Valve Card  v5.0.0 — рівень сигналу, вимикач анімацій,
+//  необмежений список датчиків протічки, налаштована висота картки.
 // ═══════════════════════════════════════════════════════════════
 
 class WaterValveCard extends HTMLElement {
@@ -116,6 +116,13 @@ class WaterValveCard extends HTMLElement {
       50%       { border-color: rgba(239,68,68,0.75); }
     }
 
+    /* Global animation kill-switch (disable_animations: true). Everything
+       here uses CSS animation, so this rule reaches all of it in one
+       shot — it deliberately does NOT touch transition, which is how
+       .valve-knob animates the actual crane toggle, so that one keeps
+       working regardless of this setting. */
+    .card.anim-off, .card.anim-off * { animation: none !important; }
+
     .content { position: relative; z-index: 1; }
 
     .header {
@@ -144,7 +151,12 @@ class WaterValveCard extends HTMLElement {
       line-height: 1.15;
     }
 
-    .battery-container {
+    .status-icons {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .battery-container, .signal-container {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -156,6 +168,11 @@ class WaterValveCard extends HTMLElement {
     }
     .battery-svg {
       width: 22px;
+      height: 11px;
+      overflow: visible;
+    }
+    .signal-svg {
+      width: 16px;
       height: 11px;
       overflow: visible;
     }
@@ -236,6 +253,7 @@ class WaterValveCard extends HTMLElement {
     }
 
     .control-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 10px; }
+    .sensors-left, .sensors-right { display: flex; flex: 1; gap: 8px; align-items: flex-end; }
     .sensor {
       flex: 1; height: 105px; 
       display: flex; flex-direction: column;
@@ -326,6 +344,7 @@ class WaterValveCard extends HTMLElement {
         status_opening: 'Привід рівномірно повертає затвор магістралі',
         status_closing: 'Електропривід виконує планове відсікання потоку',
         status_leak_both: 'Аварія: витік на обох датчиках!',
+        status_leak_many: 'Аварія: витік на кількох датчиках!',
         status_leak_one: 'Протікання на датчику: {name}!',
         status_leak: 'Виявлено протікання!',
         default_name: 'Водяний кран',
@@ -352,6 +371,7 @@ class WaterValveCard extends HTMLElement {
         closed_at_prefix: 'Закрыто:',
         status_closing: 'Электропривод выполняет плановое отсечение потока',
         status_leak_both: 'Авария: утечка на обоих датчиках!',
+        status_leak_many: 'Авария: утечка на нескольких датчиках!',
         status_leak_one: 'Протечка на датчике: {name}!',
         status_leak: 'Обнаружена протечка!',
         default_name: 'Водяной кран',
@@ -378,6 +398,7 @@ class WaterValveCard extends HTMLElement {
         status_closing: 'Actuator is closing the valve',
         closed_at_prefix: 'Closed:',
         status_leak_both: 'Emergency: leak on both sensors!',
+        status_leak_many: 'Emergency: leak on multiple sensors!',
         status_leak_one: 'Leak detected: {name}!',
         status_leak: 'Leak detected!',
         default_name: 'Water valve',
@@ -398,6 +419,24 @@ class WaterValveCard extends HTMLElement {
   }
 
 
+  // v5.0.0 migration: old dashboards have fixed bathroom_leak_entity /
+  // kitchen_leak_entity (+ *_label) fields. If the new `leak_sensors` list
+  // hasn't been configured yet, adopt the old fields as its first entries
+  // so nobody loses their setup on update. Never overwrites an existing list.
+  static _migrateLeakSensors(config) {
+    if (Array.isArray(config.leak_sensors) && config.leak_sensors.length > 0) {
+      return config.leak_sensors;
+    }
+    const migrated = [];
+    if (config.bathroom_leak_entity) {
+      migrated.push({ label: (config.bathroom_label || '').trim(), entity: config.bathroom_leak_entity });
+    }
+    if (config.kitchen_leak_entity) {
+      migrated.push({ label: (config.kitchen_label || '').trim(), entity: config.kitchen_leak_entity });
+    }
+    return migrated;
+  }
+
   setConfig(config) {
     const lang = config.language || 'uk';
     const pack = WaterValveCard.I18N[lang] || WaterValveCard.I18N.uk;
@@ -406,16 +445,17 @@ class WaterValveCard extends HTMLElement {
       switch_entity: config.switch_entity || null,
       valve_state_entity: config.valve_state_entity || null,
       kran_battery_entity: config.kran_battery_entity || null,
+      kran_signal_entity: config.kran_signal_entity || null,
       name: config.name || pack.default_name,
-      bathroom_leak_entity: config.bathroom_leak_entity || null,
-      kitchen_leak_entity: config.kitchen_leak_entity || null,
-      bathroom_label: (config.bathroom_label || '').trim(),
-      kitchen_label: (config.kitchen_label || '').trim(),
+      leak_sensors: WaterValveCard._migrateLeakSensors(config),
       text_dry: config.text_dry || pack.text_dry,
       text_leak: config.text_leak || pack.text_leak,
       btn_close: config.btn_close || pack.btn_close,
       btn_open: config.btn_open || pack.btn_open,
       toggle_lock_ms: config.toggle_lock_ms || 8000,
+      disable_animations: !!config.disable_animations,
+      card_height: config.card_height || null,
+      card_min_height: config.card_min_height || null,
     };
   }
 
@@ -479,6 +519,15 @@ class WaterValveCard extends HTMLElement {
   }
 
   _syncAnimationState() {
+    if (this._config && this._config.disable_animations) {
+      // Everything except the crane-toggle transition is off: freeze the
+      // canvas on a single static frame instead of looping it.
+      this._stopWaterAnimation();
+      this._waterLevelLeft = this._targetWaterLevelLeft;
+      this._waterLevelRight = this._targetWaterLevelRight;
+      this._drawWaterFrame();
+      return;
+    }
     const shouldRun =
       this.isConnected &&
       document.visibilityState !== 'hidden' &&
@@ -561,12 +610,13 @@ class WaterValveCard extends HTMLElement {
     const cfg = this._config;
     // Visibility of a leak-sensor block depends ONLY on whether an entity is
     // configured. The label is a separate, purely cosmetic concern — if it's
-    // empty we just hide the label text and keep showing the block.
-    const bathEnabled = !!cfg.bathroom_leak_entity;
-    const kitEnabled = !!cfg.kitchen_leak_entity;
-    const bathLeak = bathEnabled && this._isLeak(cfg.bathroom_leak_entity);
-    const kitLeak  = kitEnabled && this._isLeak(cfg.kitchen_leak_entity);
-    return { valveState, isUnavailable, bathLeak, kitLeak, hasLeak: bathLeak || kitLeak };
+    // empty we just hide the label text and keep showing the block. The list
+    // itself has no hard cap here — the editor UI is what currently limits
+    // it to 2 rows.
+    const sensors = (cfg.leak_sensors || []).filter((s) => s && s.entity);
+    const leakStates = sensors.map((s) => ({ label: s.label || '', entity: s.entity, isLeak: this._isLeak(s.entity) }));
+    const leaking = leakStates.filter((s) => s.isLeak);
+    return { valveState, isUnavailable, leakStates, leaking, hasLeak: leaking.length > 0 };
   }
 
   _cancelToggle() {
@@ -637,13 +687,24 @@ class WaterValveCard extends HTMLElement {
               <div class="state-label" id="state-label"></div>
             </div>
 
-            <div class="battery-container" id="battery-container">
-              <svg class="battery-svg" viewBox="0 0 24 12">
-                <rect x="1" y="1" width="18" height="10" rx="2.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
-                <rect x="20" y="4.5" width="2" height="3" rx="1" fill="rgba(255,255,255,0.4)"/>
-                <rect id="battery-level-bar" x="3" y="3" width="14" height="6" rx="0.7" fill="#10b981"/>
-              </svg>
-              <span class="battery-text" id="battery-text">--%</span>
+            <div class="status-icons">
+              <div class="battery-container" id="battery-container">
+                <svg class="battery-svg" viewBox="0 0 24 12">
+                  <rect x="1" y="1" width="18" height="10" rx="2.5" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="1.5"/>
+                  <rect x="20" y="4.5" width="2" height="3" rx="1" fill="rgba(255,255,255,0.4)"/>
+                  <rect id="battery-level-bar" x="3" y="3" width="14" height="6" rx="0.7" fill="#10b981"/>
+                </svg>
+                <span class="battery-text" id="battery-text">--%</span>
+              </div>
+              <div class="signal-container" id="signal-container">
+                <svg class="signal-svg" id="signal-bars" viewBox="0 0 20 14">
+                  <rect data-bar="1" x="1" y="9" width="3" height="4" rx="0.8" fill="rgba(255,255,255,0.5)"/>
+                  <rect data-bar="2" x="6" y="6" width="3" height="7" rx="0.8" fill="rgba(255,255,255,0.5)"/>
+                  <rect data-bar="3" x="11" y="3" width="3" height="10" rx="0.8" fill="rgba(255,255,255,0.5)"/>
+                  <rect data-bar="4" x="16" y="0" width="3" height="13" rx="0.8" fill="rgba(255,255,255,0.5)"/>
+                </svg>
+                <span class="battery-text" id="signal-text">--%</span>
+              </div>
             </div>
           </div>
 
@@ -776,19 +837,9 @@ class WaterValveCard extends HTMLElement {
           </div>
 
           <div class="control-row">
-            <div class="sensor" id="sensor-bath">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-bath" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-bath"></div>
-              <div class="sensor-state" id="state-bath"></div>
-            </div>
-
+            <div class="sensors-left" id="sensors-left"></div>
             <button type="button" class="action-btn" id="action-btn"></button>
-
-            <div class="sensor" id="sensor-kitchen">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-kitchen" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-kitchen"></div>
-              <div class="sensor-state" id="state-kitchen"></div>
-            </div>
+            <div class="sensors-right" id="sensors-right"></div>
           </div>
         </div>
       </div>
@@ -870,15 +921,17 @@ class WaterValveCard extends HTMLElement {
       if (this._holdFired) { this._holdFired = false; return; }
       if (this._isToggling) return;
       e.stopPropagation();
-      const ripple = document.createElement('div');
-      ripple.className = 'ripple';
-      const rect = card.getBoundingClientRect();
-      const size = Math.max(rect.width, rect.height);
-      const cx = (e.clientX ?? rect.left + rect.width / 2) - rect.left;
-      const cy = (e.clientY ?? rect.top + rect.height / 2) - rect.top;
-      ripple.style.cssText = `width:${size}px;height:${size}px;top:${cy - size / 2}px;left:${cx - size / 2}px;`;
-      card.appendChild(ripple);
-      setTimeout(() => ripple.remove(), 500);
+      if (!this._config.disable_animations) {
+        const ripple = document.createElement('div');
+        ripple.className = 'ripple';
+        const rect = card.getBoundingClientRect();
+        const size = Math.max(rect.width, rect.height);
+        const cx = (e.clientX ?? rect.left + rect.width / 2) - rect.left;
+        const cy = (e.clientY ?? rect.top + rect.height / 2) - rect.top;
+        ripple.style.cssText = `width:${size}px;height:${size}px;top:${cy - size / 2}px;left:${cx - size / 2}px;`;
+        card.appendChild(ripple);
+        setTimeout(() => ripple.remove(), 500);
+      }
       this._toggle();
     };
 
@@ -891,11 +944,11 @@ class WaterValveCard extends HTMLElement {
     const batteryEl = this.shadowRoot?.getElementById('battery-container');
     this._bindHold(batteryEl, () => this._config.kran_battery_entity, sig);
 
-    const bathEl = this.shadowRoot?.getElementById('sensor-bath');
-    this._bindHold(bathEl, () => this._config.bathroom_leak_entity, sig);
+    const signalEl = this.shadowRoot?.getElementById('signal-container');
+    this._bindHold(signalEl, () => this._config.kran_signal_entity, sig);
 
-    const kitchenEl = this.shadowRoot?.getElementById('sensor-kitchen');
-    this._bindHold(kitchenEl, () => this._config.kitchen_leak_entity, sig);
+    // Leak-sensor blocks are rendered dynamically (unlimited list) — each
+    // one gets its own hold-binding at creation time, see _fillSensorSlot().
   }
 
   _detachEvents() {
@@ -1383,10 +1436,17 @@ class WaterValveCard extends HTMLElement {
 
     this._targetWaterLevelLeft = 0.75;
     this._targetWaterLevelRight = isOpen ? 0.75 : 0;
+    if (cfg.disable_animations) {
+      this._waterLevelLeft = this._targetWaterLevelLeft;
+      this._waterLevelRight = this._targetWaterLevelRight;
+      this._drawWaterFrame();
+    }
 
+    const signalState = cfg.kran_signal_entity ? this._state(cfg.kran_signal_entity) : null;
+    const leakKey = d.leakStates.map((s) => `${s.entity}:${s.isLeak}:${s.label}`).join(',');
     const renderKey = this._isToggling
-      ? `toggling-${this._targetState}|${batteryState}|${d.bathLeak}|${d.kitLeak}|${cfg.name}`
-      : `static-${d.valveState}|${batteryState}|${d.bathLeak}|${d.kitLeak}|${cfg.name}`;
+      ? `toggling-${this._targetState}|${batteryState}|${signalState}|${leakKey}|${cfg.name}|${cfg.disable_animations}|${cfg.card_height}|${cfg.card_min_height}`
+      : `static-${d.valveState}|${batteryState}|${signalState}|${leakKey}|${cfg.name}|${cfg.disable_animations}|${cfg.card_height}|${cfg.card_min_height}`;
 
     if (this._lastKey === renderKey) return;
     this._lastKey = renderKey;
@@ -1398,9 +1458,8 @@ class WaterValveCard extends HTMLElement {
 
     if (d.hasLeak) {
       stateLabel = this._t('leak');
-      if (d.bathLeak && d.kitLeak) statusText = this._t('status_leak_both');
-      else if (d.bathLeak) statusText = this._t('status_leak_one').replace('{name}', cfg.bathroom_label || '1');
-      else if (d.kitLeak) statusText = this._t('status_leak_one').replace('{name}', cfg.kitchen_label || '2');
+      if (d.leaking.length === 1) statusText = this._t('status_leak_one').replace('{name}', d.leaking[0].label || '1');
+      else if (d.leaking.length > 1) statusText = this._t('status_leak_many');
       else statusText = this._t('status_leak');
       accentColor = '#ef4444'; accentGlow = 'rgba(239,68,68,0.45)'; dotColor = '#ef4444'; dotClass = 'dot blink';
     } else if (this._isToggling) {
@@ -1445,6 +1504,9 @@ class WaterValveCard extends HTMLElement {
 
     card.classList.toggle('has-leak', d.hasLeak);
     card.classList.toggle('disabled-card', this._isToggling);
+    card.classList.toggle('anim-off', !!cfg.disable_animations);
+    card.style.height = cfg.card_height ? `${cfg.card_height}px` : '';
+    card.style.minHeight = cfg.card_min_height ? `${cfg.card_min_height}px` : '';
 
     r.getElementById('name').textContent = cfg.name.toUpperCase();
     r.getElementById('state-label').textContent = stateLabel;
@@ -1473,12 +1535,33 @@ class WaterValveCard extends HTMLElement {
       }
     }
 
+    const sigContainer = r.getElementById('signal-container');
+    if (sigContainer) {
+      if (!cfg.kran_signal_entity) {
+        sigContainer.style.display = 'none';
+      } else {
+        sigContainer.style.display = '';
+        const sigStateObj = this._hass.states[cfg.kran_signal_entity];
+        const sigVal = parseFloat(sigStateObj ? sigStateObj.state : NaN);
+        const unit = (sigStateObj && sigStateObj.attributes && sigStateObj.attributes.unit_of_measurement) || '%';
+        r.getElementById('signal-text').textContent = isNaN(sigVal) ? `—${unit}` : `${sigVal}${unit}`;
+        const barsSvg = r.getElementById('signal-bars');
+        if (barsSvg) {
+          const barsOn = WaterValveCard._signalBars(sigVal);
+          for (let i = 1; i <= 4; i++) {
+            const bar = barsSvg.querySelector(`[data-bar="${i}"]`);
+            if (bar) bar.setAttribute('opacity', i <= barsOn ? '1' : '0.25');
+          }
+        }
+      }
+    }
+
     const textDry = cfg.text_dry || this._t('text_dry');
     const textLeak = cfg.text_leak || this._t('text_leak');
     // Block visibility is gated by the entity only — label presence just
-    // controls whether the name text is shown.
-    this._updateSensor(r, 'bath', cfg.bathroom_label, d.bathLeak, textDry, textLeak, cfg.bathroom_leak_entity || null);
-    this._updateSensor(r, 'kitchen', cfg.kitchen_label, d.kitLeak, textDry, textLeak, cfg.kitchen_leak_entity || null);
+    // controls whether the name text is shown. The list has no hard cap;
+    // it's split roughly evenly across the two flanking slots.
+    this._renderLeakSensors(r, d.leakStates, textDry, textLeak);
 
     const btn = r.getElementById('action-btn');
     btn.classList.toggle('disabled', this._isToggling || d.isUnavailable);
@@ -1496,33 +1579,75 @@ class WaterValveCard extends HTMLElement {
     }
   }
 
-  _updateSensor(root, id, label, isLeak, textDry, textLeak, entityId) {
-    const el = root.getElementById(`sensor-${id}`);
-    if (!el) return;
-    // Visibility of the whole block depends only on whether an entity is
-    // configured — an empty label no longer hides it.
-    if (!entityId) {
-      el.style.display = 'none';
-      return;
+  // Maps a raw signal value onto 1-4 lit bars. Accepts either a 0-100%-style
+  // reading or a dBm-style reading (~-100..0) — whichever the chosen sensor
+  // happens to report — and falls back to 1 bar for anything unparseable.
+  static _signalBars(val) {
+    if (isNaN(val)) return 0;
+    let pct;
+    if (val <= 0 && val >= -100) {
+      pct = val + 100;
+    } else {
+      pct = val;
     }
-    el.style.display = '';
-    const icon = root.getElementById(`icon-${id}`);
-    el.classList.toggle('leak', isLeak);
-    const labelEl = root.getElementById(`label-${id}`);
-    if (labelEl) {
-      // No label set → just hide the name text, keep the block visible.
-      labelEl.style.display = label ? '' : 'none';
-      labelEl.textContent = label ? label.toUpperCase() : '';
+    pct = Math.max(0, Math.min(100, pct));
+    return Math.max(1, Math.ceil(pct / 25));
+  }
+
+  // Splits the leak-sensor list roughly evenly across the two flanking
+  // slots either side of the toggle button — 1/1 for the common 2-sensor
+  // case, matching the pre-5.0.0 bathroom/kitchen layout. No hard cap here;
+  // the editor is what currently limits people to 2 rows.
+  _renderLeakSensors(r, leakStates, textDry, textLeak) {
+    const left = r.getElementById('sensors-left');
+    const right = r.getElementById('sensors-right');
+    if (!left || !right) return;
+    const splitAt = Math.ceil(leakStates.length / 2);
+    this._fillSensorContainer(left, leakStates.slice(0, splitAt), textDry, textLeak);
+    this._fillSensorContainer(right, leakStates.slice(splitAt), textDry, textLeak);
+  }
+
+  _fillSensorContainer(container, list, textDry, textLeak) {
+    if (container.childElementCount !== list.length) {
+      container.innerHTML = list
+        .map(
+          () => `
+        <div class="sensor">
+          <div class="sensor-icon-wrap"><svg class="sensor-icon" viewBox="0 0 32 32" fill="none"></svg></div>
+          <div class="sensor-name"></div>
+          <div class="sensor-state"></div>
+        </div>`
+        )
+        .join('');
     }
-    root.getElementById(`state-${id}`).textContent = isLeak ? textLeak : textDry;
-    const fill = isLeak ? '#ef4444' : '#10b981';
-    const stroke = isLeak ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.3)';
-    icon.innerHTML = WaterValveCard._dropIcon(id, fill, stroke);
+    list.forEach((s, i) => {
+      const el = container.children[i];
+      if (!el) return;
+      el.classList.toggle('leak', s.isLeak);
+      const labelEl = el.querySelector('.sensor-name');
+      labelEl.style.display = s.label ? '' : 'none';
+      labelEl.textContent = s.label ? s.label.toUpperCase() : '';
+      el.querySelector('.sensor-state').textContent = s.isLeak ? textLeak : textDry;
+      const fill = s.isLeak ? '#ef4444' : '#10b981';
+      const stroke = s.isLeak ? 'rgba(239,68,68,0.4)' : 'rgba(16,185,129,0.3)';
+      el.querySelector('.sensor-icon').innerHTML = WaterValveCard._dropIcon(`${container.id}-${i}`, fill, stroke);
+      // Bind the hold-to-inspect handler once per element instance; the
+      // entity it points at is refreshed on every render via _entityRef,
+      // so re-ordering/relabeling never needs a rebind.
+      el._entityRef = s.entity;
+      if (!el.dataset.holdBound) {
+        el.dataset.holdBound = '1';
+        this._bindHold(el, () => el._entityRef, this._eventsAC ? this._eventsAC.signal : undefined);
+      }
+    });
   }
 
 
   getCardSize() {
-    return 6;
+    const cfg = this._config || {};
+    if (cfg.card_height) return Math.max(1, Math.ceil(cfg.card_height / 50));
+    const extraSensors = Math.max(0, ((cfg.leak_sensors || []).length) - 2);
+    return 6 + Math.ceil(extraSensors / 2);
   }
 
   static getStubConfig() {
@@ -1545,45 +1670,60 @@ class WaterValveCardEditor extends HTMLElement {
       switch_entity: "Кран / реле (обов'язково)",
       valve_state_entity: 'Сенсор стану крана (необов\u2019язково)',
       kran_battery_entity: 'Сенсор батареї (необов\u2019язково)',
-      bathroom_label: 'Назва сенсора протічки 1 (необов\u2019язково, лише косметика)',
-      bathroom_leak_entity: 'Сенсор протічки 1 (порожньо = блок сховано)',
-      kitchen_label: 'Назва сенсора протічки 2 (необов\u2019язково, лише косметика)',
-      kitchen_leak_entity: 'Сенсор протічки 2 (порожньо = блок сховано)',
+      kran_signal_entity: 'Сенсор рівня сигналу (необов\u2019язково)',
       text_dry: 'Текст "сухо" (перевизначає мову)',
       text_leak: 'Текст "протічка" (перевизначає мову)',
       btn_open: 'Текст кнопки "Відкрити" (перевизначає мову)',
       btn_close: 'Текст кнопки "Закрити" (перевизначає мову)',
-      toggle_lock_ms: 'Час анімації (мс)',
+      toggle_lock_ms: 'Час анімації перемикання (мс)',
+      disable_animations: 'Вимкнути всі анімації (крім перемикання крана)',
+      card_height: 'Поточна висота картки, px (порожньо = авто)',
+      card_min_height: 'Мінімальна висота картки, px (порожньо = авто)',
+      leak_sensors_title: 'Датчики протічки',
+      add_leak_sensor_btn: '+ Додати датчик протічки',
+      leak_sensor_name_placeholder: 'Назва (косметика)',
+      leak_sensor_entity_placeholder: 'Ентіті датчика',
+      remove_btn: 'Видалити',
     },
     ru: {
       name: 'Название карточки',
       switch_entity: 'Кран / реле (обязательно)',
       valve_state_entity: 'Сенсор состояния крана (необязательно)',
       kran_battery_entity: 'Сенсор батареи (необязательно)',
-      bathroom_label: 'Название сенсора протечки 1 (необязательно, только косметика)',
-      bathroom_leak_entity: 'Сенсор протечки 1 (пусто = блок скрыт)',
-      kitchen_label: 'Название сенсора протечки 2 (необязательно, только косметика)',
-      kitchen_leak_entity: 'Сенсор протечки 2 (пусто = блок скрыт)',
+      kran_signal_entity: 'Сенсор уровня сигнала (необязательно)',
       text_dry: 'Текст "сухо" (переопределяет язык)',
       text_leak: 'Текст "протечка" (переопределяет язык)',
       btn_open: 'Текст кнопки "Открыть" (переопределяет язык)',
       btn_close: 'Текст кнопки "Закрыть" (переопределяет язык)',
-      toggle_lock_ms: 'Время анимации (мс)',
+      toggle_lock_ms: 'Время анимации переключения (мс)',
+      disable_animations: 'Отключить все анимации (кроме переключения крана)',
+      card_height: 'Текущая высота карточки, px (пусто = авто)',
+      card_min_height: 'Минимальная высота карточки, px (пусто = авто)',
+      leak_sensors_title: 'Датчики протечки',
+      add_leak_sensor_btn: '+ Добавить датчик протечки',
+      leak_sensor_name_placeholder: 'Название (косметика)',
+      leak_sensor_entity_placeholder: 'Энтити датчика',
+      remove_btn: 'Удалить',
     },
     en: {
       name: 'Card name',
       switch_entity: 'Valve / switch (required)',
       valve_state_entity: 'Valve state sensor (optional)',
       kran_battery_entity: 'Battery sensor (optional)',
-      bathroom_label: 'Leak sensor 1 name (optional, cosmetic only)',
-      bathroom_leak_entity: 'Leak sensor 1 entity (empty = block hidden)',
-      kitchen_label: 'Leak sensor 2 name (optional, cosmetic only)',
-      kitchen_leak_entity: 'Leak sensor 2 entity (empty = block hidden)',
+      kran_signal_entity: 'Signal level sensor (optional)',
       text_dry: 'Text when dry (optional, overrides language)',
       text_leak: 'Text when leaking (optional, overrides language)',
       btn_open: 'Open button text (optional, overrides language)',
       btn_close: 'Close button text (optional, overrides language)',
-      toggle_lock_ms: 'Animation time (ms)',
+      toggle_lock_ms: 'Toggle animation time (ms)',
+      disable_animations: 'Disable all animations (except the crane toggle)',
+      card_height: 'Current card height, px (empty = auto)',
+      card_min_height: 'Minimum card height, px (empty = auto)',
+      leak_sensors_title: 'Leak sensors',
+      add_leak_sensor_btn: '+ Add leak sensor',
+      leak_sensor_name_placeholder: 'Name (cosmetic)',
+      leak_sensor_entity_placeholder: 'Sensor entity',
+      remove_btn: 'Remove',
     },
   };
 
@@ -1594,7 +1734,17 @@ class WaterValveCardEditor extends HTMLElement {
   }
 
   setConfig(config) {
-    this._config = config || {};
+    const cfg = { ...(config || {}) };
+    // Same v5.0.0 migration as the card itself — the editor needs its own
+    // copy since it works from the raw config, not the card's normalized one.
+    if (!Array.isArray(cfg.leak_sensors) || cfg.leak_sensors.length === 0) {
+      const migrated = [];
+      if (cfg.bathroom_leak_entity) migrated.push({ label: (cfg.bathroom_label || '').trim(), entity: cfg.bathroom_leak_entity });
+      if (cfg.kitchen_leak_entity) migrated.push({ label: (cfg.kitchen_label || '').trim(), entity: cfg.kitchen_leak_entity });
+      if (migrated.length) cfg.leak_sensors = migrated;
+    }
+    if (!Array.isArray(cfg.leak_sensors)) cfg.leak_sensors = [];
+    this._config = cfg;
     this._redraw();
   }
 
@@ -1602,6 +1752,14 @@ class WaterValveCardEditor extends HTMLElement {
     this._hass = hass;
     if (this._form) {
       this._form.hass = hass;
+    }
+    // Refresh existing entity-pickers in place rather than rebuilding the
+    // whole leak-sensor list on every hass tick — a full rebuild here would
+    // steal focus out from under someone mid-keystroke in a label field.
+    if (this._leakList) {
+      this._leakList.querySelectorAll('ha-entity-picker').forEach((p) => {
+        p.hass = hass;
+      });
     }
   }
 
@@ -1649,24 +1807,9 @@ class WaterValveCardEditor extends HTMLElement {
         selector: { entity: { domain: "sensor" } },
       },
       {
-        name: "bathroom_label",
-        label: L("bathroom_label"),
-        selector: { text: {} },
-      },
-      {
-        name: "bathroom_leak_entity",
-        label: L("bathroom_leak_entity"),
-        selector: { entity: { domain: "binary_sensor" } },
-      },
-      {
-        name: "kitchen_label",
-        label: L("kitchen_label"),
-        selector: { text: {} },
-      },
-      {
-        name: "kitchen_leak_entity",
-        label: L("kitchen_leak_entity"),
-        selector: { entity: { domain: "binary_sensor" } },
+        name: "kran_signal_entity",
+        label: L("kran_signal_entity"),
+        selector: { entity: { domain: "sensor" } },
       },
       {
         name: "text_dry",
@@ -1695,6 +1838,25 @@ class WaterValveCardEditor extends HTMLElement {
           number: { min: 500, max: 120000, mode: "box", unit_of_measurement: "ms" },
         },
       },
+      {
+        name: "disable_animations",
+        label: L("disable_animations"),
+        selector: { boolean: {} },
+      },
+      {
+        name: "card_height",
+        label: L("card_height"),
+        selector: {
+          number: { min: 100, max: 1000, mode: "box", unit_of_measurement: "px" },
+        },
+      },
+      {
+        name: "card_min_height",
+        label: L("card_min_height"),
+        selector: {
+          number: { min: 100, max: 1000, mode: "box", unit_of_measurement: "px" },
+        },
+      },
     ];
   }
 
@@ -1704,14 +1866,13 @@ class WaterValveCardEditor extends HTMLElement {
       "switch_entity",
       "valve_state_entity",
       "kran_battery_entity",
-      "bathroom_leak_entity",
-      "kitchen_leak_entity",
-      "bathroom_label",
-      "kitchen_label",
+      "kran_signal_entity",
       "text_dry",
       "text_leak",
       "btn_open",
       "btn_close",
+      "card_height",
+      "card_min_height",
     ].forEach((k) => {
       if (out[k] === "" || out[k] === null || out[k] === undefined) delete out[k];
     });
@@ -1720,8 +1881,14 @@ class WaterValveCardEditor extends HTMLElement {
     if (out.toggle_lock_ms === undefined || out.toggle_lock_ms === null || out.toggle_lock_ms === "") {
       out.toggle_lock_ms = 8000;
     }
-    // Drop any leftover value from configs saved before v4.4.0 removed this feature.
+    out.disable_animations = !!out.disable_animations;
+    if (!Array.isArray(out.leak_sensors)) out.leak_sensors = [];
+    // Drop leftovers from configs saved before this version.
     delete out.auto_toggle_duration;
+    delete out.bathroom_leak_entity;
+    delete out.bathroom_label;
+    delete out.kitchen_leak_entity;
+    delete out.kitchen_label;
     return out;
   }
 
@@ -1756,16 +1923,127 @@ class WaterValveCardEditor extends HTMLElement {
       switch_entity: c.switch_entity || "",
       valve_state_entity: c.valve_state_entity || "",
       kran_battery_entity: c.kran_battery_entity || "",
-      bathroom_label: c.bathroom_label || "",
-      bathroom_leak_entity: c.bathroom_leak_entity || "",
-      kitchen_label: c.kitchen_label || "",
-      kitchen_leak_entity: c.kitchen_leak_entity || "",
+      kran_signal_entity: c.kran_signal_entity || "",
       text_dry: c.text_dry || "",
       text_leak: c.text_leak || "",
       btn_open: c.btn_open || "",
       btn_close: c.btn_close || "",
       toggle_lock_ms: c.toggle_lock_ms ?? 8000,
+      disable_animations: !!c.disable_animations,
+      card_height: c.card_height || "",
+      card_min_height: c.card_min_height || "",
     };
+    this._renderLeakRows();
+  }
+
+  // ── Dynamic, uncapped leak-sensor list ──
+  // The UI below intentionally caps itself at MAX_LEAK_SENSORS_UI rows so
+  // the card layout (two flanking slots either side of the toggle button)
+  // doesn't get ahead of itself — but the underlying `leak_sensors` array
+  // has no limit in code. Raising the cap later is a one-line change here.
+  static MAX_LEAK_SENSORS_UI = 2;
+
+  _emitConfigChanged() {
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _ensureLeakSection() {
+    if (this._leakSection) return;
+    const section = document.createElement("div");
+    section.style.cssText = "margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--divider-color, rgba(0,0,0,.12));";
+    const title = document.createElement("div");
+    title.style.cssText = "font-size:14px;font-weight:500;margin-bottom:8px;color:var(--primary-text-color,#000);";
+    title.textContent = this._editorLabel("leak_sensors_title");
+    section.appendChild(title);
+
+    const list = document.createElement("div");
+    list.id = "leak-sensors-rows";
+    section.appendChild(list);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.textContent = this._editorLabel("add_leak_sensor_btn");
+    addBtn.style.cssText =
+      "margin-top:4px;padding:8px 14px;border-radius:8px;border:1px solid var(--divider-color,#ccc);background:transparent;color:var(--primary-color,#03a9f4);cursor:pointer;font-size:13px;";
+    addBtn.addEventListener("click", () => {
+      const sensors = this._config.leak_sensors || [];
+      if (sensors.length >= WaterValveCardEditor.MAX_LEAK_SENSORS_UI) return;
+      this._config = { ...this._config, leak_sensors: [...sensors, { label: "", entity: "" }] };
+      this._emitConfigChanged();
+      this._renderLeakRows();
+    });
+    section.appendChild(addBtn);
+
+    this.appendChild(section);
+    this._leakSection = section;
+    this._leakList = list;
+    this._leakAddBtn = addBtn;
+  }
+
+  _renderLeakRows() {
+    this._ensureLeakSection();
+    const list = this._leakList;
+    const sensors = this._config.leak_sensors || [];
+    list.innerHTML = "";
+    sensors.forEach((s, idx) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:8px;";
+
+      const nameInput = document.createElement("ha-textfield");
+      nameInput.label = this._editorLabel("leak_sensor_name_placeholder");
+      nameInput.value = s.label || "";
+      nameInput.style.cssText = "flex:1;min-width:0;";
+      nameInput.addEventListener("input", (ev) => {
+        const val = ev.target.value;
+        const next = (this._config.leak_sensors || []).slice();
+        next[idx] = { ...next[idx], label: val };
+        this._config = { ...this._config, leak_sensors: next };
+        this._emitConfigChanged();
+      });
+
+      const picker = document.createElement("ha-entity-picker");
+      picker.hass = this._hass;
+      picker.label = this._editorLabel("leak_sensor_entity_placeholder");
+      picker.value = s.entity || "";
+      picker.includeDomains = ["binary_sensor"];
+      picker.style.cssText = "flex:2;min-width:0;";
+      picker.addEventListener("value-changed", (ev) => {
+        const val = ev.detail.value;
+        const next = (this._config.leak_sensors || []).slice();
+        next[idx] = { ...next[idx], entity: val };
+        this._config = { ...this._config, leak_sensors: next };
+        this._emitConfigChanged();
+      });
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.textContent = "\u2715";
+      removeBtn.title = this._editorLabel("remove_btn");
+      removeBtn.style.cssText =
+        "flex:0 0 auto;border:none;background:transparent;color:var(--error-color,#db4437);font-size:16px;cursor:pointer;padding:4px 8px;";
+      removeBtn.addEventListener("click", () => {
+        const next = (this._config.leak_sensors || []).slice();
+        next.splice(idx, 1);
+        this._config = { ...this._config, leak_sensors: next };
+        this._emitConfigChanged();
+        this._renderLeakRows();
+      });
+
+      row.appendChild(nameInput);
+      row.appendChild(picker);
+      row.appendChild(removeBtn);
+      list.appendChild(row);
+    });
+
+    if (this._leakAddBtn) {
+      this._leakAddBtn.style.display = sensors.length >= WaterValveCardEditor.MAX_LEAK_SENSORS_UI ? "none" : "";
+    }
   }
 }
 
@@ -1806,12 +2084,12 @@ window.customCards.push({
   type: "water-valve-card",
   name: "Water Valve Card",
   preview: true,
-  description: "Smart water valve / Водяний кран — language, leaks, animation.",
+  description: "Smart water valve / Водяний кран — signal, leak list, animation toggle.",
   documentationURL: "https://github.com/kdinya/smart-water-valve",
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 4.5.0 ",
+  "%c WATER-VALVE-CARD %c 5.0.0 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
