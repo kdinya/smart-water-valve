@@ -12,10 +12,10 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 4.3.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 4.4.0 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v4.3.0 — труби з водою на всю ширину,
+//  Water Valve Card  v4.4.0 — труби з водою на всю ширину,
 //  центральний корпус фіксований (max-width:400px, центрований).
 // ═══════════════════════════════════════════════════════════════
 
@@ -377,75 +377,10 @@ class WaterValveCard extends HTMLElement {
     return pack[key] || WaterValveCard.I18N.en[key] || key;
   }
 
-  _durationKey() {
-    const id = this._config?.switch_entity || 'default';
-    return `water-valve-card-duration:${id}`;
-  }
-
   _getToggleMs() {
-    // While auto_toggle_duration is on, a real measured value (once we have
-    // one) always wins over the manually configured toggle_lock_ms — it
-    // fully replaces it, not just as a fallback.
     const cfg = this._config || {};
-    if (cfg.auto_toggle_duration) {
-      try {
-        const saved = localStorage.getItem(this._durationKey());
-        if (saved) {
-          const n = parseInt(saved, 10);
-          if (!isNaN(n) && n >= 500 && n <= 120000) return n;
-        }
-      } catch (e) {}
-    }
     const manual = parseInt(cfg.toggle_lock_ms, 10);
     return !isNaN(manual) && manual > 0 ? manual : 8000;
-  }
-
-  _startAutoMeasure(expectOpen) {
-    if (!this._config?.auto_toggle_duration || !this._hass) return;
-    const start = Date.now();
-    const stateId = this._config.valve_state_entity || this._config.switch_entity;
-    if (!stateId) return;
-    if (this._measureUnsub) {
-      try { this._measureUnsub(); } catch (e) {}
-      this._measureUnsub = null;
-    }
-    const openStates = new Set(['on', 'open', 'opened', 'відкрито', 'открыто', 'відчинено']);
-    const check = () => {
-      const st = this._hass.states[stateId];
-      if (!st) return;
-      const raw = (st.state || '').toString().toLowerCase().trim();
-      const isOpen = openStates.has(raw);
-      if (isOpen === expectOpen) {
-        const ms = Date.now() - start;
-        if (ms >= 500 && ms <= 120000) {
-          try { localStorage.setItem(this._durationKey(), String(ms)); } catch (e) {}
-          this._config.toggle_lock_ms = ms;
-        }
-        if (this._measureUnsub) {
-          try { this._measureUnsub(); } catch (e) {}
-          this._measureUnsub = null;
-        }
-        if (this._measureTimer) {
-          clearTimeout(this._measureTimer);
-          this._measureTimer = null;
-        }
-      }
-    };
-    // poll while toggling (works without hass connection object)
-    this._measureTimer = setInterval(check, 200);
-    this._measureUnsub = () => {
-      if (this._measureTimer) {
-        clearInterval(this._measureTimer);
-        this._measureTimer = null;
-      }
-    };
-    // safety stop after 2 min
-    setTimeout(() => {
-      if (this._measureUnsub) {
-        try { this._measureUnsub(); } catch (e) {}
-        this._measureUnsub = null;
-      }
-    }, 120000);
   }
 
 
@@ -467,7 +402,6 @@ class WaterValveCard extends HTMLElement {
       btn_close: config.btn_close || pack.btn_close,
       btn_open: config.btn_open || pack.btn_open,
       toggle_lock_ms: config.toggle_lock_ms || 8000,
-      auto_toggle_duration: !!config.auto_toggle_duration,
     };
   }
 
@@ -491,10 +425,6 @@ class WaterValveCard extends HTMLElement {
     // if it's reattached later, re-render from the real hass state instead.
     this._isToggling = false;
     this._targetState = null;
-    if (this._measureUnsub) {
-      this._measureUnsub();
-      this._measureUnsub = null;
-    }
     this._detachEvents();
     this._teardownVisibilityHandling();
     this._stopWaterAnimation();
@@ -624,8 +554,6 @@ class WaterValveCard extends HTMLElement {
         this._cancelToggle();
       });
     }
-
-    this._startAutoMeasure(!isOpen);
 
     const lockMs = this._getToggleMs();
     if (this._toggleTimeout) clearTimeout(this._toggleTimeout);
@@ -1514,29 +1442,29 @@ class WaterValveCardEditor extends HTMLElement {
         selector: { entity: { domain: ["sensor", "binary_sensor"] } },
       },
       {
-        name: "bathroom_leak_entity",
-        label: "Leak sensor 1 entity (optional)",
-        selector: { entity: { domain: "binary_sensor" } },
+        name: "kran_battery_entity",
+        label: "Battery sensor (optional)",
+        selector: { entity: { domain: "sensor" } },
       },
       {
         name: "bathroom_label",
-        label: "Leak sensor 1 name (empty = hide)",
+        label: "Leak sensor 1 name (optional, cosmetic only)",
         selector: { text: {} },
       },
       {
-        name: "kitchen_leak_entity",
-        label: "Leak sensor 2 entity (optional)",
+        name: "bathroom_leak_entity",
+        label: "Leak sensor 1 entity (empty = block hidden)",
         selector: { entity: { domain: "binary_sensor" } },
       },
       {
         name: "kitchen_label",
-        label: "Leak sensor 2 name (empty = hide)",
+        label: "Leak sensor 2 name (optional, cosmetic only)",
         selector: { text: {} },
       },
       {
-        name: "kran_battery_entity",
-        label: "Battery sensor (optional)",
-        selector: { entity: { domain: "sensor" } },
+        name: "kitchen_leak_entity",
+        label: "Leak sensor 2 entity (empty = block hidden)",
+        selector: { entity: { domain: "binary_sensor" } },
       },
       {
         name: "text_dry",
@@ -1565,11 +1493,6 @@ class WaterValveCardEditor extends HTMLElement {
           number: { min: 500, max: 120000, mode: "box", unit_of_measurement: "ms" },
         },
       },
-      {
-        name: "auto_toggle_duration",
-        label: "Auto-measure animation time",
-        selector: { boolean: {} },
-      },
     ];
   }
 
@@ -1595,7 +1518,8 @@ class WaterValveCardEditor extends HTMLElement {
     if (out.toggle_lock_ms === undefined || out.toggle_lock_ms === null || out.toggle_lock_ms === "") {
       out.toggle_lock_ms = 8000;
     }
-    out.auto_toggle_duration = !!out.auto_toggle_duration;
+    // Drop any leftover value from configs saved before v4.4.0 removed this feature.
+    delete out.auto_toggle_duration;
     return out;
   }
 
@@ -1625,17 +1549,16 @@ class WaterValveCardEditor extends HTMLElement {
       name: c.name || "Smart Water Valve",
       switch_entity: c.switch_entity || "",
       valve_state_entity: c.valve_state_entity || "",
-      bathroom_leak_entity: c.bathroom_leak_entity || "",
-      bathroom_label: c.bathroom_label || "",
-      kitchen_leak_entity: c.kitchen_leak_entity || "",
-      kitchen_label: c.kitchen_label || "",
       kran_battery_entity: c.kran_battery_entity || "",
+      bathroom_label: c.bathroom_label || "",
+      bathroom_leak_entity: c.bathroom_leak_entity || "",
+      kitchen_label: c.kitchen_label || "",
+      kitchen_leak_entity: c.kitchen_leak_entity || "",
       text_dry: c.text_dry || "",
       text_leak: c.text_leak || "",
       btn_open: c.btn_open || "",
       btn_close: c.btn_close || "",
       toggle_lock_ms: c.toggle_lock_ms ?? 8000,
-      auto_toggle_duration: !!c.auto_toggle_duration,
     };
   }
 }
@@ -1682,7 +1605,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 4.3.0 ",
+  "%c WATER-VALVE-CARD %c 4.4.0 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
