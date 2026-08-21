@@ -4,9 +4,9 @@
 [![GitHub release](https://img.shields.io/github/release/kdinya/smart-water-valve.svg?style=for-the-badge)](https://github.com/kdinya/smart-water-valve/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
-A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list, and full UK/RU/EN localization.
+A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
-Current version: **v5.0.1**. See [Changelog](#changelog) for what's new.
+Current version: **v5.0.2**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -45,7 +45,7 @@ The card is a self-contained visual control for a water valve actuator:
 
 - Renders two full-width animated pipes with flowing water, bubbles, glass reflections and a lever that smoothly animates when the valve opens/closes.
 - Pressing the **open/close button** toggles the valve (calls the appropriate service on your configured entity — `switch.turn_on`/`turn_off` or `valve.open_valve`/`close_valve`) and shows an "opening…"/"closing…" transitional state while the action is in progress. **Only the button is a tap target — tapping elsewhere on the card body does nothing**, to avoid accidental toggles.
-- Displays up to **two independently configurable leak sensors**, managed as a proper list in the editor (see [Leak sensors](#leak-sensors)), each shown as DRY/LEAK with an icon that changes color and pulses on leak. **A leak block is shown whenever its entity is set — the name is purely optional/cosmetic.**
+- Displays up to **four independently configurable leak sensors**, managed as a proper list in the editor (see [Leak sensors](#leak-sensors)), each shown as a square DRY/LEAK block with an icon that changes color and pulses on leak. **A leak block is shown whenever its entity is set — the name is purely optional/cosmetic.**
 - Shows a battery level for the valve actuator, if you provide a battery sensor.
 - Shows a **signal-strength indicator** next to the battery indicator, if you provide a signal sensor (Wi-Fi RSSI in dBm, Zigbee LQI, or a plain percentage — auto-detected).
 - Lets you set a **minimum** and/or a **fixed height** for the card, useful for masonry/sections dashboard layouts where you want consistent card sizing.
@@ -77,7 +77,7 @@ The card is a self-contained visual control for a water valve actuator:
 4. Find **Water Valve Card** in the list and click **Download**.
 5. Make sure the resource `water-valve-card.js` was added automatically under **Settings → Dashboards → ⋮ → Resources** (HACS does this for you).
 6. Hard-refresh your browser (**Ctrl+F5** / **Cmd+Shift+R**) so the new JavaScript is loaded, not a cached copy.
-7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `5.0.1` log line — this confirms the right version is active.
+7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `5.0.2` log line — this confirms the right version is active.
 
 ### Manual installation
 
@@ -96,7 +96,7 @@ The card is a self-contained visual control for a water valve actuator:
 
 1. Edit your dashboard → **Add card**.
 2. Search for **"Water Valve"** or **"Водяний"**.
-3. The card's built-in editor opens, letting you pick every entity and label from dropdowns — no YAML needed. Fields appear in this order: language, name, valve switch, valve state sensor, battery sensor, signal sensor, animation toggle, text/button overrides, toggle animation timing, min/fixed card height — followed by a separate **Leak sensors** list at the bottom of the editor (see [Leak sensors](#leak-sensors)). See the [Configuration reference](#configuration-reference) below for what each field does.
+3. The card's built-in editor opens, letting you pick every entity and label from dropdowns — no YAML needed. Fields appear in this order: language, name, valve switch, valve state sensor, battery sensor, signal sensor, animation toggle, text/button overrides, toggle animation timing, min/fixed card height — followed by a **position and scale** section (5 sliders: valve+pipes vertical offset, valve scale on phone/tablet, pipes scale on phone/tablet) and a separate **Leak sensors** list at the bottom (see [Leak sensors](#leak-sensors)). See the [Configuration reference](#configuration-reference) below for what each field does.
 
 ### Using YAML
 
@@ -119,7 +119,7 @@ switch_entity: switch.water_valve
 | `valve_state_entity` | `string` (entity id) | ❌ | A separate `sensor`/`binary_sensor` reporting the valve's **real physical position** (open/closed), if your hardware reports it independently from the switch command state. | falls back to `switch_entity`'s own state |
 | `kran_battery_entity` | `string` (entity id) | ❌ | A `sensor` entity with the battery level of the valve actuator (numeric, e.g. `%`). | none (battery indicator hidden) |
 | `kran_signal_entity` | `string` (entity id) | ❌ | A `sensor` entity with the signal strength of the valve actuator. Shown next to the battery indicator. Accepts Wi-Fi RSSI in `dBm`, a plain `%` sensor, or a unitless value in the 0–255 range (treated as Zigbee LQI) — see [Signal strength sensor](#signal-strength-sensor). | none (signal indicator hidden) |
-| `leak_sensors` | `list` of `{ label, entity }` | ❌ | Up to two leak/moisture sensors, managed via the editor's dynamic list — see [Leak sensors](#leak-sensors). | `[]` (no blocks shown) |
+| `leak_sensors` | `list` of `{ label, entity }` | ❌ | Up to four leak/moisture sensors, managed via the editor's dynamic list — see [Leak sensors](#leak-sensors). | `[]` (no blocks shown) |
 | `animations_enabled` | `boolean` | ❌ | Turns off the water/bubble canvas animation and every pulsing/blinking CSS effect. The valve-lever rotation on open/close is never affected — see [Animation switch](#animation-switch). | `true` |
 | `text_dry` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is off (dry). | localized `"СУХО"` / `"DRY"` etc. |
 | `text_leak` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is on (leak). | localized `"ПРОТІЧКА"` / `"LEAK"` etc. |
@@ -128,15 +128,26 @@ switch_entity: switch.water_valve
 | `toggle_lock_ms` | `number` (milliseconds, 500–120000) | ❌ | How long the card shows the transitional "opening…/closing…" state (and disables the button) after you press it. Set this to roughly how long your physical actuator takes to fully open/close. | `8000` (8 seconds) |
 | `card_min_height` | `number` (px) | ❌ | Minimum height for the card. On phones (viewport narrower than 600px) the card's height is always set to this value directly — see [Card height on phones vs. tablets/desktop](#card-height-on-phones-vs-tabletsdesktop). `0` means "no minimum". | `0` (auto) |
 | `card_height` | `number` (px) | ❌ | Fixed ("current") height for the card, used on tablets/desktop (viewport 600px or wider). `0` means "auto height". | `0` (auto) |
-| `valve_vertical_offset` | `number` (%, −50..50) | ❌ | Vertical position of the valve + pipes graphic within its section, as a percentage offset from centered. Set via the **slider with −/+ buttons** in the visual editor. | `0` (centered) |
+| `valve_vertical_offset` | `number` (%, −50..50) | ❌ | Vertical position of the valve + pipes graphic within its section, as a percentage offset from centered. Set via a **slider with −/+ buttons** in the visual editor. | `0` (centered) |
+| `valve_scale_mobile` | `number` (0.5–2.5) | ❌ | Max-size scale multiplier for the **valve graphic only**, used on phones (viewport narrower than 600px). | `1.15` |
+| `valve_scale_tablet` | `number` (0.5–2.5) | ❌ | Max-size scale multiplier for the **valve graphic only**, used on tablets/desktop (viewport 600px or wider). | `1.15` |
+| `pipes_scale_mobile` | `number` (0.5–2.5) | ❌ | Max-size scale multiplier for the **pipes/water canvas only**, used on phones. | `1.15` |
+| `pipes_scale_tablet` | `number` (0.5–2.5) | ❌ | Max-size scale multiplier for the **pipes/water canvas only**, used on tablets/desktop. | `1.15` |
 
 ### Leak sensors
 
-As of v5.0.0, leak sensors are a proper list (`leak_sensors: [{ label, entity }, ...]`) instead of two hardcoded fields. In the visual editor, this shows up as its own **"Leak sensors"** section below the main form: a **"+ Додати датчик протічки" / "+ Add leak sensor"** button adds a name + entity-picker row, with a **✕** button on each row to remove it.
+Leak sensors are a proper list (`leak_sensors: [{ label, entity }, ...]`). In the visual editor, this shows up as its own **"Leak sensors"** section below the main form: a **"+ Додати датчик протічки" / "+ Add leak sensor"** button adds a name + entity-picker row, with a **✕** button on each row to remove it.
 
-The card itself still only has **two** leak-sensor blocks in its layout, so the editor currently caps the list at 2 entries — but the underlying config format has no hard limit. Raising the on-card limit later is a small change (`MAX_LEAK_SENSORS` in `water-valve-card.js`) plus adding matching blocks to the card's template; the data model doesn't need to change.
+The card supports up to **four** leak-sensor blocks, laid out in this fixed order:
 
-Each block is controlled **only by its `entity` field**. If the entity is set, the block is shown — with a name if `label` is set, or without one if it's left empty. If the entity is empty, the block doesn't appear at all, regardless of the label.
+1. Left of the open/close button
+2. Right of the open/close button
+3. Above sensor 1
+4. Above sensor 2
+
+The row above (sensors 3/4) is only shown at all once at least one of them has an entity configured — with just 1 or 2 sensors set, the card looks exactly like the original 2-sensor layout. Each block is a **square**, and controlled **only by its `entity` field** — if the entity is set, the block is shown (with a name if `label` is set, or without one if it's left empty); if the entity is empty, the block doesn't appear, regardless of the label. If you remove a sensor in the editor, every sensor after it automatically shifts up into its place (e.g. removing #1 turns the old #2 into the new #1, #3 into #2, and so on) — you never end up with a gap in the middle of the list.
+
+The editor caps the list at 4 entries to match the card's fixed layout — the underlying config format has no hard limit; raising the on-card limit further is a small change (`MAX_LEAK_SENSORS` in `water-valve-card.js`) plus adding matching blocks to the card's template.
 
 ```yaml
 leak_sensors:
@@ -167,15 +178,21 @@ leak_sensors:
 - **Phones (viewport narrower than 600px):** the card's height is always set to `card_min_height`, if you've configured one. This keeps the card compact and consistent on a phone screen regardless of what `card_height` is set to.
 - **Tablets and desktop (viewport 600px or wider):** the card's height is set to `card_height`, if you've configured one — falling back to `card_min_height`, then to automatic sizing, if `card_height` isn't set.
 
-Either way, the header, status row, and the sensor/button row at the bottom never get clipped by `overflow: hidden` — only the valve/pipes graphic in the middle shrinks or grows to fill whatever space is left, and the sensor/button row always stays aligned to the card's bottom edge.
+Either way, the header, status row, and the sensor/button row at the bottom never get clipped — only the valve/pipes graphic in the middle grows or shrinks (flexibly) to fill whatever space is left, and the sensor/button row always stays aligned to the card's bottom edge. The valve+pipes graphic itself is layered **above** the button row (not under it), so on very short cards it can visually extend over the buttons instead of ever hiding behind them — use the vertical offset and scale sliders below to fine-tune how much it does that.
 
 ### Valve position slider
 
-The visual editor has a **"Valve + pipes position"** slider (with **−**/**+** buttons alongside it) that lets you nudge the valve-and-pipes graphic up or down within its section, as a percentage offset from centered (`valve_vertical_offset`, −50% to +50%). Useful if you've set a short `card_min_height`/`card_height` and want the graphic to sit closer to the top or bottom instead of dead-center.
+The visual editor's **position and scale** section has 5 sliders (each with **−**/**+** buttons alongside them), all backed by real per-config numbers and updated live without ever rebuilding the slider itself while you drag — so dragging is smooth, not jerky:
+
+- **Valve + pipes vertical offset** (`valve_vertical_offset`, −50% to +50% from centered) — nudges the whole graphic up or down within its section. Useful if you've set a short `card_min_height`/`card_height` and want the graphic to sit closer to the top or bottom instead of dead-center.
+- **Valve scale — phone / tablet-desktop** (`valve_scale_mobile` / `valve_scale_tablet`, 0.5×–2.5×) — max-size scale for the valve graphic only, set independently for narrow (phone) vs. wide (tablet/desktop) viewports.
+- **Pipes scale — phone / tablet-desktop** (`pipes_scale_mobile` / `pipes_scale_tablet`, 0.5×–2.5×) — same idea, but for the pipes/water canvas only.
+
+Valve scale and pipes scale are intentionally independent, since you may want the water canvas cropped tighter than the valve body (or vice versa) on a very short card. Keep them equal if you want the valve and pipes to always look visually connected — setting them far apart can visibly separate the valve body from the pipe ends.
 
 ### Long-press for entity details
 
-Holding down (~500ms) on the **valve + pipes graphic** opens that entity's Home Assistant more-info dialog — the same gesture also works on the battery indicator, the signal indicator, and each leak-sensor block, each opening its own entity's dialog. **The open/close button itself does not have this behavior** — holding it does nothing extra, only a normal tap toggles the valve, so there's no risk of accidentally opening a dialog while trying to operate the valve quickly.
+Holding down (~500ms) on the **valve + pipes graphic** (any of the four leak-sensor blocks) opens that entity's Home Assistant more-info dialog — the same gesture also works on the battery indicator and the signal indicator, each opening its own entity's dialog. **The open/close button itself does not have this behavior** — holding it does nothing extra, only a normal tap toggles the valve, so there's no risk of accidentally opening a dialog while trying to operate the valve quickly.
 
 ## Toggle animation timing
 
@@ -207,7 +224,12 @@ btn_open: OPEN
 btn_close: SHUT OFF
 toggle_lock_ms: 6000
 card_min_height: 260
+card_height: 340
 valve_vertical_offset: -10
+valve_scale_mobile: 1
+valve_scale_tablet: 1.15
+pipes_scale_mobile: 1
+pipes_scale_tablet: 1.15
 ```
 
 ## Minimal YAML example
@@ -220,16 +242,25 @@ switch_entity: switch.water_valve
 ## How the card behaves
 
 - **Press the open/close button** to toggle the valve — tapping the rest of the card does nothing. While the actuator is moving (per `toggle_lock_ms`), the button shows an "opening…"/"closing…" state and is disabled to avoid conflicting commands.
-- **Hold (long-press, ~500ms)** the action button, either leak-sensor block, or the battery indicator to open that entity's more-info dialog. A quick tap still just does its normal thing.
+- **Hold (long-press, ~500ms)** the valve + pipes graphic, any leak-sensor block, the battery indicator, or the signal indicator to open that entity's more-info dialog. A quick tap still just does its normal thing.
 - The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed.
+- The valve + pipes graphic is layered **above** the sensor/button row, so it's never hidden underneath the buttons — even when its position/scale sliders push it lower or bigger than its section.
 - If the valve entity is missing or reports `unavailable`, the card shows a distinct grey **"Unavailable"** state instead of implying the valve is safely closed, and the button is disabled (there's nothing useful to call a service on).
 - When the valve is closed, the card shows the date/time it closed — regardless of what closed it (this card, another dashboard, an automation). It disappears again as soon as the valve is open.
-- If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **both** leak sensors are triggered simultaneously, the status text reflects that explicitly.
+- If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **more than one** leak sensor is triggered simultaneously, the status text reflects that explicitly.
 - The **battery indicator** shows the numeric value from `kran_battery_entity` with a small level bar; it's hidden entirely if you don't configure a battery entity.
 - The **signal-strength indicator** sits right next to the battery indicator and shows a 4-bar strength icon plus a percentage, normalized from `kran_signal_entity`; it's hidden entirely if you don't configure a signal entity.
 - The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `animations_enabled: false`.
 
 ## Changelog
+
+### v5.0.2
+
+- **Fixed:** when the valve was closed (lever pointing down), the button row could visually cover part of the valve graphic. The valve + pipes section is now explicitly layered above the sensor/button row, so it always renders on top instead of getting hidden behind it.
+- **Fixed:** the valve graphic shrank oddly on short/mobile card heights instead of scaling predictably. Valve size is no longer tied to the available container height at all — it's driven purely by the new scale settings below, so it stays exactly as configured regardless of how much vertical space the card has.
+- **Fixed:** dragging the vertical-position slider in the editor felt jerky/stuttery. The slider's DOM element was being rebuilt on every drag tick, which dropped the browser's pointer capture mid-drag; it's now updated in place instead, so dragging is smooth.
+- **Added:** `valve_scale_mobile` / `valve_scale_tablet` and `pipes_scale_mobile` / `pipes_scale_tablet` — independent max-size scale controls for the valve graphic and the pipes/water canvas, each split by phone vs. tablet/desktop viewport, each with its own slider + −/+ buttons in the editor.
+- **Changed:** leak-sensor blocks are now **square**, and the card supports up to **4** of them instead of 2 — laid out as 1: left of the button, 2: right of the button, 3: above sensor 1, 4: above sensor 2. The extra row is only shown once a 3rd/4th sensor is configured, so existing 2-sensor dashboards look unchanged. Removing a sensor in the editor still automatically shifts the rest up into its place.
 
 ### v5.0.1
 
@@ -283,7 +314,7 @@ switch_entity: switch.water_valve
 | Browser console doesn't show a `WATER-VALVE-CARD` / version log line | The old cached file is still being served. Clear the browser cache, bump the resource URL with a `?v=...` query string, or remove and re-add the resource. |
 | Card shows a config error about a missing entity | `switch_entity` isn't set — it's the only required field. |
 | A leak block doesn't show even though I set the entity | Double-check the entity id is spelled correctly — the block always shows once a valid `entity` is set on that `leak_sensors` row, with or without a label. |
-| The "+ Add leak sensor" button is greyed out | You've already reached the 2-sensor limit the card currently supports — remove one first, or see [Leak sensors](#leak-sensors) for how to raise the limit in the code. |
+| The "+ Add leak sensor" button is greyed out | You've already reached the 4-sensor limit the card currently supports — remove one first, or see [Leak sensors](#leak-sensors) for how to raise the limit in the code. |
 | My old `bathroom_leak_entity`/`kitchen_leak_entity` config disappeared after upgrading | It shouldn't — the card migrates those fields into `leak_sensors` automatically on load (see [Leak sensors](#leak-sensors)). If something still looks wrong, open the card in the visual editor and check the **Leak sensors** section; saving from there will persist the migrated config to your dashboard YAML. |
 | Tapping the card body does nothing | Expected — only the open/close button toggles the valve, to avoid accidental taps. |
 | Card shows "Unavailable" instead of Open/Closed | The `switch_entity` (or `valve_state_entity`) is missing or reporting `unavailable` in Home Assistant — check the entity itself, not the card. |

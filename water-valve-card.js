@@ -12,19 +12,20 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 5.0.1 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 5.0.2 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v5.0.1 — труби з водою на всю ширину,
-//  центральний корпус фіксований (max-width:400px, центрований).
+//  Water Valve Card  v5.0.2 — крани+труби шаром над кнопками, незалежний
+//  scale крана/труб (мобільний/планшет), до 4 квадратних датчиків
+//  протічки, плавні повзунки положення й масштабу без "ривків".
 // ═══════════════════════════════════════════════════════════════
 
-// Скільки датчиків протічки редактор дозволяє додати. Сама модель даних
-// (config.leak_sensors) — довільної довжини, ліміт лише в UI редактора та
-// в шаблоні картки (яка малює конкретно MAX_LEAK_SENSORS блоків). Щоб
-// підняти цифру пізніше — досить збільшити цю константу й додати стільки ж
-// .sensor-блоків у _ensureTemplate().
-const MAX_LEAK_SENSORS = 2;
+// Скільки датчиків протічки редактор дозволяє додати. Порядок на картці:
+// 1 — ліворуч від кнопки, 2 — праворуч від кнопки, 3 — над датчиком 1,
+// 4 — над датчиком 2. Модель даних (config.leak_sensors) сама по собі
+// довільної довжини, ліміт лише тут та в шаблоні картки (яка малює
+// конкретно MAX_LEAK_SENSORS блоків, id sensor-0..sensor-3).
+const MAX_LEAK_SENSORS = 4;
 
 class WaterValveCard extends HTMLElement {
   constructor() {
@@ -268,12 +269,30 @@ class WaterValveCard extends HTMLElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      /* Was overflow: hidden, which combined with the transform below to
+         force-shrink the valve on short/mobile cards and let the button
+         row paint over the (visually larger) valve. Now visible, with an
+         explicit z-index above .control-row, so scale/offset are fully
+         config-driven instead of fighting the container box, and the
+         valve+pipes always render above the buttons, never under them. */
+      overflow: visible;
+      z-index: 3;
       /* --valve-offset-pct: vertical position of the whole valve+pipes
-         assembly (svg AND water canvas together, so they stay in sync),
-         in % of this element's own height, set by the visual editor's
-         slider. 0% = centered (unchanged from earlier versions). */
-      transform: scale(1.15) translateY(var(--valve-offset-pct, 0%));
+         assembly, in % of this element's own height, set by the visual
+         editor's slider. 0% = centered. Scale now lives on the valve svg
+         and water canvas individually — see below — so each can have its
+         own mobile/tablet max size instead of one shared multiplier. */
+      transform: translateY(var(--valve-offset-pct, 0%));
+      /* Mobile (<600px) scale multipliers by default; overridden for
+         tablet/desktop below. */
+      --valve-scale: var(--valve-scale-mobile, 1.15);
+      --pipes-scale: var(--pipes-scale-mobile, 1.15);
+    }
+    @media (min-width: 600px) {
+      .valve-section {
+        --valve-scale: var(--valve-scale-tablet, 1.15);
+        --pipes-scale: var(--pipes-scale-tablet, 1.15);
+      }
     }
 
     .valve-svg {
@@ -281,12 +300,13 @@ class WaterValveCard extends HTMLElement {
       width: 100%;
       max-width: 400px;
       height: auto;
-      max-height: 100%;
       margin: 0 auto;
       overflow: visible;
       z-index: 2;
       position: relative;
       pointer-events: auto;
+      transform: scale(var(--valve-scale, 1.15));
+      transform-origin: center;
     }
 
     .valve-knob {
@@ -295,12 +315,22 @@ class WaterValveCard extends HTMLElement {
       transform: rotate(var(--valve-rotation, 0deg));
     }
 
+    /* Top row for leak sensors 3/4 (positioned above sensors 1/2). Hidden
+       entirely (not just empty) when neither is configured, so the
+       original 2-sensor layout is pixel-identical to before. */
+    .control-row-top {
+      display: flex; align-items: flex-end; gap: 12px; margin-bottom: 8px;
+      flex-shrink: 0;
+    }
+    .control-spacer { flex: 2; }
     .control-row {
       display: flex; align-items: flex-end; gap: 12px; margin-top: 10px;
       flex-shrink: 0;
+      position: relative;
+      z-index: 1;
     }
     .sensor {
-      flex: 1; height: 105px; 
+      flex: 1; aspect-ratio: 1 / 1; height: auto; max-height: 105px;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 4px;
       border-radius: 16px; background: rgba(22,28,38,0.4);
@@ -360,6 +390,8 @@ class WaterValveCard extends HTMLElement {
       height: 100%;
       pointer-events: none;
       z-index: 1;
+      transform: scale(var(--pipes-scale, 1.15));
+      transform-origin: center;
     }
 
     /* Вимикач анімації: гасить усі CSS @keyframes-анімації (пульсацію
@@ -396,7 +428,7 @@ class WaterValveCard extends HTMLElement {
         closed_at_prefix: 'Закрито:',
         status_opening: 'Привід рівномірно повертає затвор магістралі',
         status_closing: 'Електропривід виконує планове відсікання потоку',
-        status_leak_both: 'Аварія: витік на обох датчиках!',
+        status_leak_many: 'Аварія: витік на кількох датчиках!',
         status_leak_one: 'Протікання на датчику: {name}!',
         status_leak: 'Виявлено протікання!',
         default_name: 'Водяний кран',
@@ -422,7 +454,7 @@ class WaterValveCard extends HTMLElement {
         status_opening: 'Привод равномерно открывает магистраль',
         closed_at_prefix: 'Закрыто:',
         status_closing: 'Электропривод выполняет плановое отсечение потока',
-        status_leak_both: 'Авария: утечка на обоих датчиках!',
+        status_leak_many: 'Авария: утечка на нескольких датчиках!',
         status_leak_one: 'Протечка на датчике: {name}!',
         status_leak: 'Обнаружена протечка!',
         default_name: 'Водяной кран',
@@ -448,7 +480,7 @@ class WaterValveCard extends HTMLElement {
         status_opening: 'Actuator is opening the valve',
         status_closing: 'Actuator is closing the valve',
         closed_at_prefix: 'Closed:',
-        status_leak_both: 'Emergency: leak on both sensors!',
+        status_leak_many: 'Emergency: leak on multiple sensors!',
         status_leak_one: 'Leak detected: {name}!',
         status_leak: 'Leak detected!',
         default_name: 'Water valve',
@@ -511,7 +543,20 @@ class WaterValveCard extends HTMLElement {
       // section height, from the visual editor's slider. Clamped to a
       // sane range so a malformed/hand-edited value can't push it off-card.
       valve_vertical_offset: Math.max(-50, Math.min(50, Number(config.valve_vertical_offset) || 0)),
+      // Independent max-size scale for the valve graphic vs. the pipes/water
+      // canvas, each split by mobile (<600px viewport) vs tablet/desktop.
+      // Decoupled on purpose per user request — keep them equal for a
+      // visually coherent valve+pipe junction, or diverge intentionally.
+      valve_scale_mobile: WaterValveCard._clampScale(config.valve_scale_mobile),
+      valve_scale_tablet: WaterValveCard._clampScale(config.valve_scale_tablet),
+      pipes_scale_mobile: WaterValveCard._clampScale(config.pipes_scale_mobile),
+      pipes_scale_tablet: WaterValveCard._clampScale(config.pipes_scale_tablet),
     };
+  }
+
+  static _clampScale(v) {
+    const n = Number(v);
+    return Math.max(0.5, Math.min(2.5, isNaN(n) || !n ? 1.15 : n));
   }
 
   connectedCallback() {
@@ -700,9 +745,7 @@ class WaterValveCard extends HTMLElement {
     // empty we just hide the label text and keep showing the block.
     const sensors = (cfg.leak_sensors || []).slice(0, MAX_LEAK_SENSORS);
     const leaks = sensors.map((s) => !!s.entity && this._isLeak(s.entity));
-    const bathLeak = !!leaks[0];
-    const kitLeak = !!leaks[1];
-    return { valveState, isUnavailable, bathLeak, kitLeak, leaks, sensors, hasLeak: leaks.some(Boolean) };
+    return { valveState, isUnavailable, leaks, sensors, hasLeak: leaks.some(Boolean) };
   }
 
   _cancelToggle() {
@@ -923,19 +966,33 @@ class WaterValveCard extends HTMLElement {
             </svg>
           </div>
 
+          <div class="control-row-top" id="control-row-top" style="display:none;">
+            <div class="sensor" id="sensor-2">
+              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-2" viewBox="0 0 32 32" fill="none"></svg></div>
+              <div class="sensor-name" id="label-2"></div>
+              <div class="sensor-state" id="state-2"></div>
+            </div>
+            <div class="control-spacer"></div>
+            <div class="sensor" id="sensor-3">
+              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-3" viewBox="0 0 32 32" fill="none"></svg></div>
+              <div class="sensor-name" id="label-3"></div>
+              <div class="sensor-state" id="state-3"></div>
+            </div>
+          </div>
+
           <div class="control-row">
-            <div class="sensor" id="sensor-bath">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-bath" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-bath"></div>
-              <div class="sensor-state" id="state-bath"></div>
+            <div class="sensor" id="sensor-0">
+              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-0" viewBox="0 0 32 32" fill="none"></svg></div>
+              <div class="sensor-name" id="label-0"></div>
+              <div class="sensor-state" id="state-0"></div>
             </div>
 
             <button type="button" class="action-btn" id="action-btn"></button>
 
-            <div class="sensor" id="sensor-kitchen">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-kitchen" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-kitchen"></div>
-              <div class="sensor-state" id="state-kitchen"></div>
+            <div class="sensor" id="sensor-1">
+              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-1" viewBox="0 0 32 32" fill="none"></svg></div>
+              <div class="sensor-name" id="label-1"></div>
+              <div class="sensor-state" id="state-1"></div>
             </div>
           </div>
         </div>
@@ -1041,11 +1098,10 @@ class WaterValveCard extends HTMLElement {
     const signalEl = this.shadowRoot?.getElementById('signal-container');
     this._bindHold(signalEl, () => this._config.kran_signal_entity, sig);
 
-    const bathEl = this.shadowRoot?.getElementById('sensor-bath');
-    this._bindHold(bathEl, () => (this._config.leak_sensors || [])[0]?.entity, sig);
-
-    const kitchenEl = this.shadowRoot?.getElementById('sensor-kitchen');
-    this._bindHold(kitchenEl, () => (this._config.leak_sensors || [])[1]?.entity, sig);
+    for (let i = 0; i < MAX_LEAK_SENSORS; i++) {
+      const sensorEl = this.shadowRoot?.getElementById(`sensor-${i}`);
+      this._bindHold(sensorEl, () => (this._config.leak_sensors || [])[i]?.entity, sig);
+    }
   }
 
   _detachEvents() {
@@ -1541,9 +1597,10 @@ class WaterValveCard extends HTMLElement {
       this._drawStaticWaterFrame();
     }
 
+    const leaksKey = d.leaks.join(',');
     const renderKey = this._isToggling
-      ? `toggling-${this._targetState}|${batteryState}|${signalQuality}|${d.bathLeak}|${d.kitLeak}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}`
-      : `static-${d.valveState}|${batteryState}|${signalQuality}|${d.bathLeak}|${d.kitLeak}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}`;
+      ? `toggling-${this._targetState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`
+      : `static-${d.valveState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`;
 
     if (this._lastKey === renderKey) return;
     this._lastKey = renderKey;
@@ -1556,9 +1613,10 @@ class WaterValveCard extends HTMLElement {
     if (d.hasLeak) {
       stateLabel = this._t('leak');
       const sensorsForLabel = cfg.leak_sensors || [];
-      if (d.bathLeak && d.kitLeak) statusText = this._t('status_leak_both');
-      else if (d.bathLeak) statusText = this._t('status_leak_one').replace('{name}', sensorsForLabel[0]?.label || '1');
-      else if (d.kitLeak) statusText = this._t('status_leak_one').replace('{name}', sensorsForLabel[1]?.label || '2');
+      const leakingCount = d.leaks.filter(Boolean).length;
+      const firstIdx = d.leaks.findIndex(Boolean);
+      if (leakingCount > 1) statusText = this._t('status_leak_many');
+      else if (leakingCount === 1) statusText = this._t('status_leak_one').replace('{name}', sensorsForLabel[firstIdx]?.label || String(firstIdx + 1));
       else statusText = this._t('status_leak');
       accentColor = '#ef4444'; accentGlow = 'rgba(239,68,68,0.45)'; dotColor = '#ef4444'; dotClass = 'dot blink';
     } else if (this._isToggling) {
@@ -1611,6 +1669,10 @@ class WaterValveCard extends HTMLElement {
     const valveSection = r.getElementById('valve-section');
     if (valveSection) {
       valveSection.style.setProperty('--valve-offset-pct', `${cfg.valve_vertical_offset || 0}%`);
+      valveSection.style.setProperty('--valve-scale-mobile', cfg.valve_scale_mobile || 1.15);
+      valveSection.style.setProperty('--valve-scale-tablet', cfg.valve_scale_tablet || 1.15);
+      valveSection.style.setProperty('--pipes-scale-mobile', cfg.pipes_scale_mobile || 1.15);
+      valveSection.style.setProperty('--pipes-scale-tablet', cfg.pipes_scale_tablet || 1.15);
     }
 
     r.getElementById('name').textContent = cfg.name.toUpperCase();
@@ -1665,8 +1727,13 @@ class WaterValveCard extends HTMLElement {
     // controls whether the name text is shown. Only the first
     // MAX_LEAK_SENSORS entries of leak_sensors are ever shown on the card.
     const sensors = cfg.leak_sensors || [];
-    this._updateSensor(r, 'bath', sensors[0]?.label, d.bathLeak, textDry, textLeak, sensors[0]?.entity || null);
-    this._updateSensor(r, 'kitchen', sensors[1]?.label, d.kitLeak, textDry, textLeak, sensors[1]?.entity || null);
+    for (let i = 0; i < MAX_LEAK_SENSORS; i++) {
+      this._updateSensor(r, i, sensors[i]?.label, !!d.leaks[i], textDry, textLeak, sensors[i]?.entity || null);
+    }
+    const topRow = r.getElementById('control-row-top');
+    if (topRow) {
+      topRow.style.display = (sensors[2]?.entity || sensors[3]?.entity) ? 'flex' : 'none';
+    }
 
     const btn = r.getElementById('action-btn');
     btn.classList.toggle('disabled', this._isToggling || d.isUnavailable);
@@ -1748,9 +1815,13 @@ class WaterValveCardEditor extends HTMLElement {
       leak_label_placeholder: 'Назва (необов\u2019язково)',
       leak_entity_label: 'Сенсор протічки (ентіті)',
       leak_entity_placeholder: 'binary_sensor.datchyk_protichky',
-      leak_sensors_limit_note: `Максимум ${MAX_LEAK_SENSORS} — стільки блоків зараз є на самій картці.`,
-      valve_position_title: 'Положення крану з трубами',
-      valve_position_hint: 'Зсув по вертикалі відносно центру картки, у відсотках.',
+      leak_sensors_limit_note: `Максимум ${MAX_LEAK_SENSORS}. Порядок на картці: 1 — ліворуч від кнопки, 2 — праворуч, 3 — над датчиком 1, 4 — над датчиком 2. Видалення датчика зсуває наступні на його місце.`,
+      valve_layout_title: 'Розташування та масштаб крана й труб',
+      valve_position_title: 'Зсув по вертикалі (0% = центр)',
+      valve_scale_mobile_title: 'Масштаб крана — телефон',
+      valve_scale_tablet_title: 'Масштаб крана — планшет/ПК',
+      pipes_scale_mobile_title: 'Масштаб труб (води) — телефон',
+      pipes_scale_tablet_title: 'Масштаб труб (води) — планшет/ПК',
     },
     ru: {
       name: 'Название карточки',
@@ -1772,9 +1843,13 @@ class WaterValveCardEditor extends HTMLElement {
       leak_label_placeholder: 'Название (необязательно)',
       leak_entity_label: 'Сенсор протечки (сущность)',
       leak_entity_placeholder: 'binary_sensor.datchik_protechki',
-      leak_sensors_limit_note: `Максимум ${MAX_LEAK_SENSORS} — столько блоков сейчас есть на самой карточке.`,
-      valve_position_title: 'Положение крана с трубами',
-      valve_position_hint: 'Смещение по вертикали относительно центра карточки, в процентах.',
+      leak_sensors_limit_note: `Максимум ${MAX_LEAK_SENSORS}. Порядок на карточке: 1 — слева от кнопки, 2 — справа, 3 — над датчиком 1, 4 — над датчиком 2. Удаление датчика сдвигает следующие на его место.`,
+      valve_layout_title: 'Расположение и масштаб крана и труб',
+      valve_position_title: 'Смещение по вертикали (0% = центр)',
+      valve_scale_mobile_title: 'Масштаб крана — телефон',
+      valve_scale_tablet_title: 'Масштаб крана — планшет/ПК',
+      pipes_scale_mobile_title: 'Масштаб труб (воды) — телефон',
+      pipes_scale_tablet_title: 'Масштаб труб (воды) — планшет/ПК',
     },
     en: {
       name: 'Card name',
@@ -1796,9 +1871,13 @@ class WaterValveCardEditor extends HTMLElement {
       leak_label_placeholder: 'Name (optional)',
       leak_entity_label: 'Leak sensor (entity)',
       leak_entity_placeholder: 'binary_sensor.leak_sensor',
-      leak_sensors_limit_note: `Maximum ${MAX_LEAK_SENSORS} — that's how many blocks the card itself currently has.`,
-      valve_position_title: 'Valve + pipes position',
-      valve_position_hint: 'Vertical offset from the card center, in percent.',
+      leak_sensors_limit_note: `Maximum ${MAX_LEAK_SENSORS}. Card order: 1 — left of the button, 2 — right of it, 3 — above sensor 1, 4 — above sensor 2. Removing a sensor shifts the rest up into its place.`,
+      valve_layout_title: 'Valve + pipes position and scale',
+      valve_position_title: 'Vertical offset (0% = center)',
+      valve_scale_mobile_title: 'Valve scale — phone',
+      valve_scale_tablet_title: 'Valve scale — tablet/desktop',
+      pipes_scale_mobile_title: 'Pipes (water) scale — phone',
+      pipes_scale_tablet_title: 'Pipes (water) scale — tablet/desktop',
     },
   };
 
@@ -1959,6 +2038,19 @@ class WaterValveCardEditor extends HTMLElement {
       if (clamped === 0) delete out.valve_vertical_offset;
       else out.valve_vertical_offset = clamped;
     }
+    // Valve/pipes scale multipliers: clamp to slider range, snap to the
+    // 0.05 step, drop when equal to the 1.15 default (nothing to save).
+    ["valve_scale_mobile", "valve_scale_tablet", "pipes_scale_mobile", "pipes_scale_tablet"].forEach((k) => {
+      if (out[k] === undefined || out[k] === null || out[k] === "") {
+        delete out[k];
+        return;
+      }
+      let v = Math.max(0.5, Math.min(2.5, Number(out[k]) || 1.15));
+      v = Math.round(v / 0.05) * 0.05;
+      v = Math.round(v * 100) / 100;
+      if (Math.abs(v - 1.15) < 0.001) delete out[k];
+      else out[k] = v;
+    });
     // Leak sensors: keep at most MAX_LEAK_SENSORS, trim labels. Rows with
     // no entity yet are kept as-is (not stripped) — the card already
     // treats "no entity" as "block hidden", and stripping mid-edit here
@@ -1996,9 +2088,25 @@ class WaterValveCardEditor extends HTMLElement {
     if (this._config.language !== prevLang) {
       this._redraw();
     } else {
-      this._redrawValveSlider();
       this._redrawLeakSensors();
     }
+  }
+
+  // Used exclusively by the position/scale sliders. Unlike _commitConfig,
+  // this never rebuilds any DOM — the slider's own 'input' handler already
+  // updates its range/value-label directly. Rebuilding the <input type=range>
+  // element on every 'input' tick (the old behavior) was what made dragging
+  // feel jerky: recreating the node mid-drag drops the browser's pointer
+  // capture on it. This keeps the drag gesture on the same live element.
+  _commitSliderPatch(patch) {
+    this._config = this._clean({ ...this._config, ...patch });
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
   }
 
   _redraw() {
@@ -2073,8 +2181,9 @@ class WaterValveCardEditor extends HTMLElement {
         .wvc-leak-add-btn:disabled {
           opacity: 0.4; cursor: default; background: transparent;
         }
-        /* Valve/pipes vertical position slider */
+        /* Valve/pipes position + scale sliders */
         .wvc-valve-section { margin-top: 16px; padding-top: 4px; }
+        .wvc-slider-block { margin-bottom: 12px; }
         .wvc-valve-slider-row {
           display: flex; align-items: center; gap: 10px;
         }
@@ -2087,17 +2196,15 @@ class WaterValveCardEditor extends HTMLElement {
         .wvc-valve-btn:hover { background: rgba(3,169,244,0.08); }
         .wvc-valve-range { flex: 1; min-width: 0; }
         .wvc-valve-value {
-          flex: 0 0 auto; min-width: 42px; text-align: right;
+          flex: 0 0 auto; min-width: 46px; text-align: right;
           font-size: 13px; font-family: monospace;
           color: var(--primary-text-color, #000);
         }
       `;
       wrap.appendChild(style);
 
-      const valveSection = document.createElement("div");
-      valveSection.className = "wvc-valve-section";
-      wrap.appendChild(valveSection);
-      this._valveSection = valveSection;
+      this._sliderRefs = {};
+      this._ensureLayoutSection(wrap);
 
       const section = document.createElement("div");
       section.className = "wvc-leak-section";
@@ -2125,68 +2232,114 @@ class WaterValveCardEditor extends HTMLElement {
       card_height: c.card_height || 0,
     };
 
-    this._redrawValveSlider();
+    this._refreshSliderUI();
     this._redrawLeakSensors();
   }
 
-  // Повзунок з кнопками "−"/"+" для вертикального положення крану з
-  // трубами, у відсотках від центрального положення (0% = центр).
-  _redrawValveSlider() {
-    const section = this._valveSection;
-    if (!section) return;
-    const L = (key) => this._editorLabel(key);
-    const current = Math.max(-50, Math.min(50, Number((this._config && this._config.valve_vertical_offset) || 0)));
+  // Slider definitions shared by _ensureLayoutSection/_refreshSliderUI.
+  _sliderDefs() {
+    return [
+      { key: "valve_vertical_offset", min: -50, max: 50, step: 1, unit: "%", default: 0, titleKey: "valve_position_title" },
+      { key: "valve_scale_mobile", min: 0.5, max: 2.5, step: 0.05, unit: "×", default: 1.15, titleKey: "valve_scale_mobile_title" },
+      { key: "valve_scale_tablet", min: 0.5, max: 2.5, step: 0.05, unit: "×", default: 1.15, titleKey: "valve_scale_tablet_title" },
+      { key: "pipes_scale_mobile", min: 0.5, max: 2.5, step: 0.05, unit: "×", default: 1.15, titleKey: "pipes_scale_mobile_title" },
+      { key: "pipes_scale_tablet", min: 0.5, max: 2.5, step: 0.05, unit: "×", default: 1.15, titleKey: "pipes_scale_tablet_title" },
+    ];
+  }
 
-    section.innerHTML = "";
+  _fmtSliderValue(def, v) {
+    return def.step >= 1 ? `${Math.round(v)}${def.unit}` : `${v.toFixed(2)}${def.unit}`;
+  }
+
+  _sliderCurrent(def) {
+    const raw = this._config && this._config[def.key];
+    return raw === undefined || raw === null || raw === "" ? def.default : Number(raw);
+  }
+
+  // Builds the position/scale slider rows exactly ONCE — every later config
+  // change (drag, +/-, language switch) only ever updates these same live
+  // elements in place (see _refreshSliderUI), it never recreates them. That
+  // is what keeps dragging the <input type=range> smooth instead of jerky.
+  _ensureLayoutSection(wrap) {
+    if (this._layoutSection) return;
+    const section = document.createElement("div");
+    section.className = "wvc-valve-section";
+    wrap.appendChild(section);
+    this._layoutSection = section;
 
     const title = document.createElement("div");
     title.className = "wvc-valve-title";
-    title.textContent = L("valve_position_title");
     section.appendChild(title);
+    this._layoutTitleEl = title;
 
-    const hint = document.createElement("div");
-    hint.className = "wvc-valve-hint";
-    hint.textContent = L("valve_position_hint");
-    section.appendChild(hint);
+    this._sliderDefs().forEach((def) => {
+      const rowWrap = document.createElement("div");
+      rowWrap.className = "wvc-slider-block";
 
-    const row = document.createElement("div");
-    row.className = "wvc-valve-slider-row";
+      const label = document.createElement("div");
+      label.className = "wvc-valve-hint";
+      rowWrap.appendChild(label);
 
-    const setValue = (next) => {
-      const clamped = Math.max(-50, Math.min(50, Math.round(next)));
-      this._commitConfig({ valve_vertical_offset: clamped });
-    };
+      const row = document.createElement("div");
+      row.className = "wvc-valve-slider-row";
 
-    const minusBtn = document.createElement("button");
-    minusBtn.type = "button";
-    minusBtn.className = "wvc-valve-btn";
-    minusBtn.textContent = "−";
-    minusBtn.addEventListener("click", () => setValue(current - 1));
-    row.appendChild(minusBtn);
+      const minusBtn = document.createElement("button");
+      minusBtn.type = "button";
+      minusBtn.className = "wvc-valve-btn";
+      minusBtn.textContent = "\u2212";
 
-    const range = document.createElement("input");
-    range.type = "range";
-    range.className = "wvc-valve-range";
-    range.min = "-50";
-    range.max = "50";
-    range.step = "1";
-    range.value = String(current);
-    range.addEventListener("input", () => setValue(Number(range.value)));
-    row.appendChild(range);
+      const range = document.createElement("input");
+      range.type = "range";
+      range.className = "wvc-valve-range";
+      range.min = String(def.min);
+      range.max = String(def.max);
+      range.step = String(def.step);
 
-    const plusBtn = document.createElement("button");
-    plusBtn.type = "button";
-    plusBtn.className = "wvc-valve-btn";
-    plusBtn.textContent = "+";
-    plusBtn.addEventListener("click", () => setValue(current + 1));
-    row.appendChild(plusBtn);
+      const plusBtn = document.createElement("button");
+      plusBtn.type = "button";
+      plusBtn.className = "wvc-valve-btn";
+      plusBtn.textContent = "+";
 
-    const valueLabel = document.createElement("span");
-    valueLabel.className = "wvc-valve-value";
-    valueLabel.textContent = `${current}%`;
-    row.appendChild(valueLabel);
+      const valueLabel = document.createElement("span");
+      valueLabel.className = "wvc-valve-value";
 
-    section.appendChild(row);
+      const setValue = (next) => {
+        let clamped = Math.max(def.min, Math.min(def.max, next));
+        clamped = def.step >= 1 ? Math.round(clamped) : Math.round(clamped / def.step) * def.step;
+        range.value = String(clamped);
+        valueLabel.textContent = this._fmtSliderValue(def, clamped);
+        this._commitSliderPatch({ [def.key]: clamped });
+      };
+
+      range.value = String(this._sliderCurrent(def));
+      valueLabel.textContent = this._fmtSliderValue(def, this._sliderCurrent(def));
+      range.addEventListener("input", () => setValue(Number(range.value)));
+      minusBtn.addEventListener("click", () => setValue(this._sliderCurrent(def) - def.step));
+      plusBtn.addEventListener("click", () => setValue(this._sliderCurrent(def) + def.step));
+
+      row.appendChild(minusBtn);
+      row.appendChild(range);
+      row.appendChild(plusBtn);
+      row.appendChild(valueLabel);
+      rowWrap.appendChild(row);
+      section.appendChild(rowWrap);
+
+      this._sliderRefs[def.key] = { label, range, valueLabel, def };
+    });
+  }
+
+  // Refreshes labels (language switch) and displayed values (e.g. after
+  // setConfig() runs again) on the already-built slider rows, without ever
+  // touching the DOM nodes the user might be actively dragging.
+  _refreshSliderUI() {
+    if (!this._layoutTitleEl) return;
+    this._layoutTitleEl.textContent = this._editorLabel("valve_layout_title");
+    Object.values(this._sliderRefs || {}).forEach(({ label, range, valueLabel, def }) => {
+      label.textContent = this._editorLabel(def.titleKey);
+      const current = this._sliderCurrent(def);
+      range.value = String(current);
+      valueLabel.textContent = this._fmtSliderValue(def, current);
+    });
   }
 
   // Динамічний список датчиків протічки: "+ Додати датчик протічки" додає
@@ -2346,7 +2499,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 5.0.1 ",
+  "%c WATER-VALVE-CARD %c 5.0.2 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
