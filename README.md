@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
-Current version: **v5.0.2**. See [Changelog](#changelog) for what's new.
+Current version: **v5.0.3**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -120,7 +120,7 @@ switch_entity: switch.water_valve
 | `kran_battery_entity` | `string` (entity id) | ❌ | A `sensor` entity with the battery level of the valve actuator (numeric, e.g. `%`). | none (battery indicator hidden) |
 | `kran_signal_entity` | `string` (entity id) | ❌ | A `sensor` entity with the signal strength of the valve actuator. Shown next to the battery indicator. Accepts Wi-Fi RSSI in `dBm`, a plain `%` sensor, or a unitless value in the 0–255 range (treated as Zigbee LQI) — see [Signal strength sensor](#signal-strength-sensor). | none (signal indicator hidden) |
 | `leak_sensors` | `list` of `{ label, entity }` | ❌ | Up to four leak/moisture sensors, managed via the editor's dynamic list — see [Leak sensors](#leak-sensors). | `[]` (no blocks shown) |
-| `animations_enabled` | `boolean` | ❌ | Turns off the water/bubble canvas animation and every pulsing/blinking CSS effect. The valve-lever rotation on open/close is never affected — see [Animation switch](#animation-switch). | `true` |
+| `disable_animations` | `boolean` | ❌ | Turns off the water/bubble canvas animation and every pulsing/blinking CSS effect. The valve-lever rotation on open/close is never affected — see [Animation switch](#animation-switch). **`true` = animations off** — the checkbox in the editor is titled "Disable animations", so the label and the behavior finally point the same direction (see [Changelog](#changelog) v5.0.3). | `false` (animations on) |
 | `text_dry` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is off (dry). | localized `"СУХО"` / `"DRY"` etc. |
 | `text_leak` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is on (leak). | localized `"ПРОТІЧКА"` / `"LEAK"` etc. |
 | `btn_open` | `string` | ❌ | Label for the open action / state. | localized `"ВІДКРИТИ"` / `"OPEN"` etc. |
@@ -169,7 +169,9 @@ leak_sensors:
 
 ### Animation switch
 
-`animations_enabled: false` freezes the water/bubble canvas (it still redraws once to reflect the current open/closed level, it just stops animating continuously) and disables every CSS `@keyframes` effect on the card — the leak border glow, the status dot pulse/blink, the leak-sensor shake, the shut-off button pulse, and the tap ripple. It deliberately does **not** touch the valve-lever's rotation transition when you open or close it — that's a CSS `transition`, not an `animation`, so the toggle still feels responsive with everything else turned off. Useful on low-powered dashboard hardware (old tablets, kiosk Pis) where 60fps canvas rendering is unnecessary overhead.
+`disable_animations: true` freezes the water/bubble canvas (it still redraws once to reflect the current open/closed level, it just stops animating continuously) and disables every CSS `@keyframes` effect on the card — the leak border glow, the status dot pulse/blink, the leak-sensor shake, the shut-off button pulse, and the tap ripple. It deliberately does **not** touch the valve-lever's rotation transition when you open or close it — that's a CSS `transition`, not an `animation`, so the toggle still feels responsive with everything else turned off. Useful on low-powered dashboard hardware (old tablets, kiosk Pis) where 60fps canvas rendering is unnecessary overhead.
+
+> **Upgrading from v5.0.2 or earlier:** the old `animations_enabled` field is automatically migrated to `disable_animations` on load (`animations_enabled: false` → `disable_animations: true`, and vice versa) — nothing is lost. It's renamed because the old field's editor label described the opposite of what the checkbox actually did; `disable_animations` reads the same as the checkbox behaves.
 
 ### Card height on phones vs. tablets/desktop
 
@@ -217,7 +219,7 @@ leak_sensors:
     entity: binary_sensor.leak_bathroom
   - label: Kitchen
     entity: binary_sensor.leak_kitchen
-animations_enabled: true
+disable_animations: false
 text_dry: DRY
 text_leak: LEAK!
 btn_open: OPEN
@@ -250,9 +252,17 @@ switch_entity: switch.water_valve
 - If **any** configured leak sensor turns on, the whole card switches to an emergency visual state: red glowing/pulsing border, animated leak drops inside the pipes, and the shut-off button pulses to draw attention. If **more than one** leak sensor is triggered simultaneously, the status text reflects that explicitly.
 - The **battery indicator** shows the numeric value from `kran_battery_entity` with a small level bar; it's hidden entirely if you don't configure a battery entity.
 - The **signal-strength indicator** sits right next to the battery indicator and shows a 4-bar strength icon plus a percentage, normalized from `kran_signal_entity`; it's hidden entirely if you don't configure a signal entity.
-- The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `animations_enabled: false`.
+- The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `disable_animations: true`.
 
 ## Changelog
+
+### v5.0.3
+
+- **Fixed:** the valve/pipes could render at the wrong scale — and appear "stuck" larger — after rotating the phone, especially inside a Home Assistant masonry/grid dashboard. Root cause: the phone/tablet breakpoint used a viewport-width `@media` query, but in a multi-column dashboard the *browser viewport* can cross the 600px threshold on rotation even while the *card's own* rendered width barely changes. Replaced with a CSS **container query** (`@container`, based on the card's own width via `container-type: inline-size` on the card element) so the breakpoint reacts to the card's real size, not the phone's. Also added a `ResizeObserver` that forces an immediate redraw whenever the card's actual size changes (rotation, dashboard column changes, etc.), instead of relying solely on the animation loop to eventually catch up.
+- **Fixed:** enlarging the pipes could leave empty gaps between the water and the valve body on either side. The water/pipe boundaries used to be computed from a fixed formula that assumed the valve graphic and the pipes/water canvas were always scaled together — since v5.0.2 lets you scale them independently (`valve_scale_*` vs `pipes_scale_*`), that assumption could be wrong. The card now measures the valve graphic's actual on-screen position and sizes the water to start exactly where the valve visually ends, regardless of the two scales configured.
+- **Fixed:** leak-sensor blocks weren't reliably square in some WebViews (notably Android system WebView, used by the HA companion app) — `aspect-ratio` on a `flex: 1` item with `flex-basis: 0` isn't computed consistently everywhere. The sensor/button row now uses CSS Grid (`grid-template-columns: 1fr 2fr 1fr`) instead, which gives each sensor cell a real, stable width to base its 1:1 aspect ratio on.
+- **Changed:** renamed `animations_enabled` to **`disable_animations`**, with the checkbox's editor label and its actual behavior now pointing the same direction (`true` = animations off). The old field's label described the opposite of what the checkbox did — turning it *on* actually disabled animations while the label implied the reverse. Old configs are migrated automatically; nothing needs to change by hand.
+- **Note:** if another tool (an AI assistant, a script, a cached copy of the repo) reports only seeing up to v4.x, that's a caching issue on that tool's side, not the repository — every release through v5.0.3 is published normally (not a draft, not a pre-release) on `main`. Point it at the [Releases page](https://github.com/kdinya/smart-water-valve/releases) directly, or have it re-fetch `water-valve-card.js` from the `main` branch instead of a cached copy.
 
 ### v5.0.2
 

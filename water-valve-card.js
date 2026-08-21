@@ -12,10 +12,10 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 5.0.2 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 5.0.3 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v5.0.2 — крани+труби шаром над кнопками, незалежний
+//  Water Valve Card  v5.0.3 — крани+труби шаром над кнопками, незалежний
 //  scale крана/труб (мобільний/планшет), до 4 квадратних датчиків
 //  протічки, плавні повзунки положення й масштабу без "ривків".
 // ═══════════════════════════════════════════════════════════════
@@ -94,6 +94,14 @@ class WaterValveCard extends HTMLElement {
     :host {
       display: block;
       font-family: var(--primary-font-family, 'Roboto', 'Inter', -apple-system, sans-serif);
+      /* Breakpoints below react to the CARD's own rendered width via
+         @container, NOT the phone/browser viewport via @media. In an HA
+         masonry/grid dashboard the viewport can cross 600px on rotation
+         even while the card's actual column width barely changes — @media
+         was reacting to the wrong box, which is why the valve/pipes could
+         jump to "tablet" scale in landscape and not cleanly revert. */
+      container-type: inline-size;
+      container-name: wvc;
     }
 
     .card {
@@ -121,7 +129,7 @@ class WaterValveCard extends HTMLElement {
       min-height: var(--wvc-height-min, auto);
       height: var(--wvc-height-min, auto);
     }
-    @media (min-width: 600px) {
+    @container wvc (min-width: 600px) {
       .card {
         height: var(--wvc-height-fixed, var(--wvc-height-min, auto));
       }
@@ -288,7 +296,7 @@ class WaterValveCard extends HTMLElement {
       --valve-scale: var(--valve-scale-mobile, 1.15);
       --pipes-scale: var(--pipes-scale-mobile, 1.15);
     }
-    @media (min-width: 600px) {
+    @container wvc (min-width: 600px) {
       .valve-section {
         --valve-scale: var(--valve-scale-tablet, 1.15);
         --pipes-scale: var(--pipes-scale-tablet, 1.15);
@@ -317,20 +325,23 @@ class WaterValveCard extends HTMLElement {
 
     /* Top row for leak sensors 3/4 (positioned above sensors 1/2). Hidden
        entirely (not just empty) when neither is configured, so the
-       original 2-sensor layout is pixel-identical to before. */
-    .control-row-top {
-      display: flex; align-items: flex-end; gap: 12px; margin-bottom: 8px;
+       original 2-sensor layout is pixel-identical to before.
+       CSS Grid instead of flex+aspect-ratio: flex-basis:0 + aspect-ratio
+       is unreliable in some WebViews (Android system WebView used by the
+       HA app in particular) — Grid tracks give the .sensor cells a real,
+       stable width to base aspect-ratio:1/1 on, so they render as true
+       squares everywhere. */
+    .control-row-top, .control-row {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      align-items: end;
+      gap: 12px;
       flex-shrink: 0;
     }
-    .control-spacer { flex: 2; }
-    .control-row {
-      display: flex; align-items: flex-end; gap: 12px; margin-top: 10px;
-      flex-shrink: 0;
-      position: relative;
-      z-index: 1;
-    }
+    .control-row-top { margin-bottom: 8px; }
+    .control-row { margin-top: 10px; position: relative; z-index: 1; }
     .sensor {
-      flex: 1; aspect-ratio: 1 / 1; height: auto; max-height: 105px;
+      width: 100%; aspect-ratio: 1 / 1; height: auto;
       display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 4px;
       border-radius: 16px; background: rgba(22,28,38,0.4);
@@ -354,7 +365,9 @@ class WaterValveCard extends HTMLElement {
     .sensor.leak .sensor-state { color: #f87171; }
 
     .action-btn {
-      flex: 2; height: 50px; border-radius: 14px;
+      /* Grid column (2fr in .control-row's grid-template-columns) now
+         defines its width — no flex-basis needed anymore. */
+      width: 100%; height: 50px; border-radius: 14px;
       border: 1.5px solid rgba(56,189,248,0.3);
       background: rgba(56,189,248,0.02); color: #38bdf8;
       font-size: 13.5px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase;
@@ -517,6 +530,24 @@ class WaterValveCard extends HTMLElement {
     return legacy;
   }
 
+  // "animations_enabled" (v5.0.0–v5.0.2) had a correct field but a label
+  // in the editor that described the OPPOSITE of what the checkbox did,
+  // which is exactly backwards and confusing. Renamed to
+  // "disable_animations" with inverted, unambiguous semantics: ON = off.
+  // If the new field isn't in the saved config yet, derive it from the
+  // old one (config.animations_enabled === false → disable_animations:
+  // true); if neither is present, animations are enabled by default, i.e.
+  // disable_animations: false.
+  static _migrateDisableAnimations(config) {
+    if (config.disable_animations !== undefined && config.disable_animations !== null) {
+      return config.disable_animations === true;
+    }
+    if (config.animations_enabled !== undefined && config.animations_enabled !== null) {
+      return config.animations_enabled === false;
+    }
+    return false;
+  }
+
   setConfig(config) {
     const lang = config.language || 'uk';
     const pack = WaterValveCard.I18N[lang] || WaterValveCard.I18N.uk;
@@ -536,7 +567,10 @@ class WaterValveCard extends HTMLElement {
       btn_close: config.btn_close || pack.btn_close,
       btn_open: config.btn_open || pack.btn_open,
       toggle_lock_ms: config.toggle_lock_ms || 8000,
-      animations_enabled: config.animations_enabled !== false,
+      // disable_animations: ON (true) = animations OFF. Migrates the old
+      // (confusingly-named, inverted-label) animations_enabled field if
+      // disable_animations itself isn't present in the saved config yet.
+      disable_animations: WaterValveCard._migrateDisableAnimations(config),
       card_height: config.card_height || null,
       card_min_height: config.card_min_height || null,
       // Vertical position of the valve+pipes graphic, in % of its own
@@ -563,6 +597,7 @@ class WaterValveCard extends HTMLElement {
     if (this._initialized) {
       this._attachEvents();
       this._setupVisibilityHandling();
+      this._setupResizeHandling();
       this._syncAnimationState();
       // Force a fresh render in case state changed (or a pending toggle
       // was cancelled) while the card was detached from the DOM.
@@ -581,7 +616,32 @@ class WaterValveCard extends HTMLElement {
     this._targetState = null;
     this._detachEvents();
     this._teardownVisibilityHandling();
+    this._teardownResizeHandling();
     this._stopWaterAnimation();
+  }
+
+  /* ── Реагує на будь-яку зміну фактичного розміру картки (поворот
+     екрана, зміна кількості колонок masonry-дашборда, зміна card_height
+     в редакторі тощо). Раніше при вимкнених анімаціях canvas міг лишитися
+     "застряглим" на кадрі, намальованому під старий розмір, бо ніщо не
+     форсувало його перемалювати — а сам кран (SVG, чисте CSS) міг на мить
+     розійтися з canvas, поки браузер не перерахує layout самостійно. ── */
+  _setupResizeHandling() {
+    this._teardownResizeHandling();
+    if (!('ResizeObserver' in window)) return;
+    this._ro = new ResizeObserver(() => {
+      this._valveEdgeLeft = null;
+      this._valveEdgeRight = null;
+      if (this._waterAnimationId === null) this._drawStaticWaterFrame();
+    });
+    this._ro.observe(this);
+  }
+
+  _teardownResizeHandling() {
+    if (this._ro) {
+      this._ro.disconnect();
+      this._ro = null;
+    }
   }
 
   /* ── Пауза анімації, коли вкладка прихована або картка поза екраном:
@@ -623,7 +683,7 @@ class WaterValveCard extends HTMLElement {
     // єдина анімація, яку він свідомо НЕ чіпає, це перемикання крану
     // (CSS transition на .valve-knob, який керується окремо через
     // --valve-rotation/--valve-duration і не залежить від rAF-циклу нижче).
-    const animationsAllowed = this._config?.animations_enabled !== false;
+    const animationsAllowed = this._config?.disable_animations !== true;
     const shouldRun =
       animationsAllowed &&
       this.isConnected &&
@@ -1004,6 +1064,7 @@ class WaterValveCard extends HTMLElement {
     this._initWaterEffects();
     this._attachEvents();
     this._setupVisibilityHandling();
+    this._setupResizeHandling();
     this._syncAnimationState();
   }
 
@@ -1497,6 +1558,30 @@ class WaterValveCard extends HTMLElement {
     this._staticLayerKey = key;
   }
 
+  // Раніше межі труб рахувались фіксованою формулою (92 * scale) — вона
+  // припускала, що кран і труби масштабуються РАЗОМ. Відколи в них різний
+  // --valve-scale/--pipes-scale (мобільний/планшет окремо), ця формула
+  // розходиться з тим, де кран справді намальований, залишаючи порожні
+  // відступи. Тепер міряємо фактичну позицію SVG крана відносно canvas і
+  // кешуємо результат (в canvas-локальних пікселях) — оновлюється лише
+  // при зміні розміру/масштабу (через ResizeObserver чи render), а не
+  // щокадра, щоб не бити по продуктивності.
+  _measureValveEdges() {
+    if (!this._canvas) return;
+    const valveEl = this.shadowRoot?.getElementById('valve-graphic');
+    if (!valveEl) return;
+    const canvasRect = this._canvas.getBoundingClientRect();
+    if (canvasRect.width <= 0) return;
+    const valveRect = valveEl.getBoundingClientRect();
+    if (valveRect.width <= 0) return;
+    const relLeft = valveRect.left - canvasRect.left;
+    // Фланці кола крана в його власному viewBox (0..400) завжди на тій
+    // самій частці ширини незалежно від масштабу — CSS transform:scale()
+    // не змінює пропорції всередині елемента.
+    this._valveEdgeLeft = relLeft + valveRect.width * (this._flangeLeft.centerX / 400);
+    this._valveEdgeRight = relLeft + valveRect.width * (this._flangeRight.centerX / 400);
+  }
+
   _drawWaterFrame() {
     if (!this._ctx || !this._canvas) return;
     const ctx = this._ctx;
@@ -1520,8 +1605,9 @@ class WaterValveCard extends HTMLElement {
     this._pipeInner.bottom = centerY + 21 * scale;
 
     const centerX = wCard / 2;
-    const leftXEnd = centerX - 92 * scale;  
-    const rightXStart = centerX + 92 * scale;
+    if (this._valveEdgeLeft == null || this._valveEdgeRight == null) this._measureValveEdges();
+    const leftXEnd = this._valveEdgeLeft != null ? this._valveEdgeLeft : (centerX - 92 * scale);
+    const rightXStart = this._valveEdgeRight != null ? this._valveEdgeRight : (centerX + 92 * scale);
 
     // Ліва частина
     this._drawWaterRegion(0, leftXEnd, this._waterLevelLeft, wCard, scale);
@@ -1593,14 +1679,14 @@ class WaterValveCard extends HTMLElement {
     // Без rAF-циклу (анімація вимкнена) нікому підхопити нову ціль рівня
     // води — перемальовуємо один кадр одразу, інакше труба "застрягне" на
     // старому рівні до наступної зміни видимості картки.
-    if (cfg.animations_enabled === false && this._waterAnimationId === null) {
+    if (cfg.disable_animations === true && this._waterAnimationId === null) {
       this._drawStaticWaterFrame();
     }
 
     const leaksKey = d.leaks.join(',');
     const renderKey = this._isToggling
-      ? `toggling-${this._targetState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`
-      : `static-${d.valveState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.animations_enabled}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`;
+      ? `toggling-${this._targetState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.disable_animations}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`
+      : `static-${d.valveState}|${batteryState}|${signalQuality}|${leaksKey}|${cfg.name}|${cfg.disable_animations}|${cfg.card_height}|${cfg.card_min_height}|${cfg.valve_vertical_offset}|${cfg.valve_scale_mobile}|${cfg.valve_scale_tablet}|${cfg.pipes_scale_mobile}|${cfg.pipes_scale_tablet}`;
 
     if (this._lastKey === renderKey) return;
     this._lastKey = renderKey;
@@ -1661,7 +1747,7 @@ class WaterValveCard extends HTMLElement {
 
     card.classList.toggle('has-leak', d.hasLeak);
     card.classList.toggle('disabled-card', this._isToggling);
-    card.classList.toggle('anim-off', cfg.animations_enabled === false);
+    card.classList.toggle('anim-off', cfg.disable_animations === true);
 
     card.style.setProperty('--wvc-height-min', cfg.card_min_height ? `${cfg.card_min_height}px` : 'auto');
     card.style.setProperty('--wvc-height-fixed', cfg.card_height ? `${cfg.card_height}px` : 'auto');
@@ -1673,6 +1759,11 @@ class WaterValveCard extends HTMLElement {
       valveSection.style.setProperty('--valve-scale-tablet', cfg.valve_scale_tablet || 1.15);
       valveSection.style.setProperty('--pipes-scale-mobile', cfg.pipes_scale_mobile || 1.15);
       valveSection.style.setProperty('--pipes-scale-tablet', cfg.pipes_scale_tablet || 1.15);
+      // Scale/offset changed → the valve's rendered position moved, but a
+      // pure CSS transform doesn't fire ResizeObserver. Force a remeasure
+      // on the next draw instead of leaving stale cached edges.
+      this._valveEdgeLeft = null;
+      this._valveEdgeRight = null;
     }
 
     r.getElementById('name').textContent = cfg.name.toUpperCase();
@@ -1732,7 +1823,7 @@ class WaterValveCard extends HTMLElement {
     }
     const topRow = r.getElementById('control-row-top');
     if (topRow) {
-      topRow.style.display = (sensors[2]?.entity || sensors[3]?.entity) ? 'flex' : 'none';
+      topRow.style.display = (sensors[2]?.entity || sensors[3]?.entity) ? 'grid' : 'none';
     }
 
     const btn = r.getElementById('action-btn');
@@ -1801,7 +1892,7 @@ class WaterValveCardEditor extends HTMLElement {
       valve_state_entity: 'Сенсор стану крана (необов\u2019язково)',
       kran_battery_entity: 'Сенсор батареї (необов\u2019язково)',
       kran_signal_entity: 'Сенсор рівня сигналу (необов\u2019язково)',
-      animations_enabled: 'Анімації (вимикає всі, крім перемикання крану)',
+      disable_animations: 'Вимкнути анімації (крім перемикання крану)',
       text_dry: 'Текст "сухо" (перевизначає мову)',
       text_leak: 'Текст "протічка" (перевизначає мову)',
       btn_open: 'Текст кнопки "Відкрити" (перевизначає мову)',
@@ -1829,7 +1920,7 @@ class WaterValveCardEditor extends HTMLElement {
       valve_state_entity: 'Сенсор состояния крана (необязательно)',
       kran_battery_entity: 'Сенсор батареи (необязательно)',
       kran_signal_entity: 'Сенсор уровня сигнала (необязательно)',
-      animations_enabled: 'Анимации (выключает все, кроме переключения крана)',
+      disable_animations: 'Отключить анимации (кроме переключения крана)',
       text_dry: 'Текст "сухо" (переопределяет язык)',
       text_leak: 'Текст "протечка" (переопределяет язык)',
       btn_open: 'Текст кнопки "Открыть" (переопределяет язык)',
@@ -1857,7 +1948,7 @@ class WaterValveCardEditor extends HTMLElement {
       valve_state_entity: 'Valve state sensor (optional)',
       kran_battery_entity: 'Battery sensor (optional)',
       kran_signal_entity: 'Signal strength sensor (optional)',
-      animations_enabled: 'Animations (disables all except the valve toggle)',
+      disable_animations: 'Disable animations (except the valve toggle)',
       text_dry: 'Text when dry (optional, overrides language)',
       text_leak: 'Text when leaking (optional, overrides language)',
       btn_open: 'Open button text (optional, overrides language)',
@@ -1895,7 +1986,11 @@ class WaterValveCardEditor extends HTMLElement {
     const leakSensors = WaterValveCard._migrateLeakSensors(config)
       .slice(0, MAX_LEAK_SENSORS)
       .map((s) => ({ label: (s.label || '').trim(), entity: s.entity || '' }));
-    this._config = { ...config, leak_sensors: leakSensors };
+    // Так само мігруємо старий animations_enabled → новий disable_animations
+    // (інвертована, однозначна назва), щоб редактор одразу показував
+    // коректний стан чекбоксу для вже збережених конфігів.
+    const disableAnimations = WaterValveCard._migrateDisableAnimations(config);
+    this._config = { ...config, leak_sensors: leakSensors, disable_animations: disableAnimations };
     this._redraw();
   }
 
@@ -1955,8 +2050,8 @@ class WaterValveCardEditor extends HTMLElement {
         selector: { entity: { domain: "sensor" } },
       },
       {
-        name: "animations_enabled",
-        label: L("animations_enabled"),
+        name: "disable_animations",
+        label: L("disable_animations"),
         selector: { boolean: {} },
       },
       {
@@ -2022,9 +2117,13 @@ class WaterValveCardEditor extends HTMLElement {
     if (out.toggle_lock_ms === undefined || out.toggle_lock_ms === null || out.toggle_lock_ms === "") {
       out.toggle_lock_ms = 8000;
     }
-    if (out.animations_enabled === undefined || out.animations_enabled === null) {
-      out.animations_enabled = true;
+    if (out.disable_animations === undefined || out.disable_animations === null) {
+      out.disable_animations = false;
+    } else {
+      out.disable_animations = out.disable_animations === true;
     }
+    // Legacy field from v5.0.0–v5.0.2, fully replaced by disable_animations.
+    delete out.animations_enabled;
     // 0 or empty → "auto", no point saving it.
     ["card_height", "card_min_height"].forEach((k) => {
       if (!out[k] || out[k] === "" || Number(out[k]) <= 0) delete out[k];
@@ -2222,7 +2321,7 @@ class WaterValveCardEditor extends HTMLElement {
       valve_state_entity: c.valve_state_entity || "",
       kran_battery_entity: c.kran_battery_entity || "",
       kran_signal_entity: c.kran_signal_entity || "",
-      animations_enabled: c.animations_enabled !== false,
+      disable_animations: c.disable_animations === true,
       text_dry: c.text_dry || "",
       text_leak: c.text_leak || "",
       btn_open: c.btn_open || "",
@@ -2499,7 +2598,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 5.0.2 ",
+  "%c WATER-VALVE-CARD %c 5.0.3 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
