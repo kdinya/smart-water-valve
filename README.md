@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
-Current version: **v5.0.5**. See [Changelog](#changelog) for what's new.
+Current version: **v5.0.6**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -267,6 +267,15 @@ switch_entity: switch.water_valve
 - The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `disable_animations: true`.
 
 ## Changelog
+
+### v5.0.6
+
+- **Fixed:** the valve/pipe graphic is now anchored with `position: absolute`, centered on the card's own box (plus the configured vertical-offset slider), completely independent of every other element on the card. Previously it was a flexible flow item, so its actual on-screen position was the sum of everything around it — the header's height, whether the "closed at" line was showing, how many leak sensors were configured — any of which visibly moved the valve when they changed. Now nothing but the offset slider can move it.
+- **Changed:** adding a 3rd/4th leak sensor no longer shrinks or pushes up the pipe to make room for the second sensor row. The sensor rows and the action button are now grouped together and pinned to the card's bottom edge on their own, independent of the valve; on a short card they're free to visually overlap onto the pipe graphic instead of squeezing it.
+- **Changed:** the "closed at HH:MM" text (only ever shown when the valve is closed) has moved from under the header to directly above the toggle button, centered — it reads better next to the control that reopens the valve than next to the state text at the top.
+- **Changed:** switching-time measurement (added in v5.0.5) now keeps only the running *maximum* ever measured per direction — a single slow run can no longer be undercut by a later faster one, so "recommended: at least X ms" only ever holds if X only ever grows.
+- **Added:** an "auto-apply the measured maximum" checkbox next to the measured-time note in the editor — when enabled, the manual animation-time field is kept in sync with the measured maximum automatically instead of needing to be copied over by hand.
+- **Added:** a "Test toggle (measure now)" button in the editor — toggles the real entity and measures the transition time right from the config screen, without needing to go find the card on a dashboard first.
 
 ### v5.0.5
 

@@ -12,17 +12,17 @@ if (!window.customCards.some((c) => c.type === "water-valve-card")) {
     documentationURL: "https://github.com/kdinya/smart-water-valve",
   });
 }
-console.info("%c WATER-VALVE-CARD %c loading 5.0.5 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
+console.info("%c WATER-VALVE-CARD %c loading 5.0.6 ", "background:#0369a1;color:#fff;font-weight:bold", "background:#0f172a;color:#38bdf8");
 
 // ═══════════════════════════════════════════════════════════════
-//  Water Valve Card  v5.0.5 — заряд/сигнал завжди прив'язані до правого
-//  краю картки (grid замість flex space-between), кран/труба/кнопки більше
-//  не зсуваються, коли текст стану змінює довжину (фіксована висота
-//  шапки, статус-рядка і "закрито:"), адаптивні блоки датчиків протічки
-//  при 3-4 шт. (прямокутники на планшеті, кап розміру на телефоні,
-//  крупніші іконка/текст), і вимірювання РЕАЛЬНОГО часу перемикання
-//  крана (окремо відкриття/закриття) з рекомендацією в редакторі під
-//  полем часу анімації.
+//  Water Valve Card  v5.0.6 — кран тепер position:absolute, жорстко
+//  прив'язаний до вертикального центру картки (+ офсет слайдера) і більше
+//  не залежить від висоти шапки/статусу/кнопок/датчиків; кнопки й датчики
+//  зібрані в один блок, прибитий до низу картки, і при 3-4 датчиках вільно
+//  налазять на трубу замість того, щоб піднімати кран; текст "закрито о…"
+//  перенесений над кнопку перемикання; вимірювання часу перемикання тепер
+//  зберігає лише зростаючий максимум, з чекбоксом автопідстановки в
+//  toggle_lock_ms і кнопкою "Тест" прямо в редакторі.
 // ═══════════════════════════════════════════════════════════════
 
 // Скільки датчиків протічки редактор дозволяє додати. Порядок на картці:
@@ -332,42 +332,59 @@ class WaterValveCard extends HTMLElement {
     .closed-at {
       font-size: 11px;
       color: rgba(255,255,255,0.3);
-      margin-top: 2px;
+      margin: 0 0 4px 0;
       line-height: 1.3;
       flex-shrink: 0;
-      /* v5.0.5: this line used to be display:none when hidden, which
-         removed it from flow — appearing/disappearing on every open/close
-         toggle changed .content's total height and shifted the valve+pipe
-         block below it. Reserving its line height always and hiding via
-         visibility keeps that space constant either way. See _render(). */
+      text-align: center;
+      /* v5.0.6: relocated from under the status-row (top of the card) to
+         directly above the action button — it's only ever shown "коли
+         кран закрито" (when the valve is closed), so it reads better next
+         to the control that reopens it than next to the header. Reserving
+         its line height always and hiding via visibility (not display)
+         keeps .action-col's height constant either way, so the button
+         itself never moves up/down when this line appears/disappears. */
       min-height: 1.3em;
     }
     .closed-at.is-hidden { visibility: hidden; }
 
+    .action-col {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* v5.0.6: .valve-section is now taken OUT of the normal flex flow
+       entirely and anchored directly to .content's box (which fills the
+       whole card) — its position depends on nothing else on the card.
+       Previously it was "flex: 1 1 auto", a flexible flow item whose
+       actual on-screen position was the sum of every sibling around it:
+       the header's height, whether the "closed at" line was showing, and
+       — worst of all — whether 3-4 leak sensors needed 2 rows below it.
+       Any of those changing (a toggle, more sensors configured) visibly
+       moved the valve/pipe. "position: absolute; top: 50%" with a
+       translateY makes its position a function of .content's own box
+       height ONLY, which is stable — nothing below or above it (buttons,
+       sensor rows, status text) can push or pull it anymore, and 3-4
+       sensor blocks are now free to overlap onto the pipe graphic on a
+       short card instead of shrinking it. */
     .valve-section {
-      position: relative;
-      width: 100%;
-      margin: 2px 0 36px 0;
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
       pointer-events: none;
-      flex: 1 1 auto;
-      min-height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
-      /* Was overflow: hidden, which combined with the transform below to
-         force-shrink the valve on short/mobile cards and let the button
-         row paint over the (visually larger) valve. Now visible, with an
-         explicit z-index above .control-row, so scale/offset are fully
-         config-driven instead of fighting the container box, and the
-         valve+pipes always render above the buttons, never under them. */
       overflow: visible;
       z-index: 3;
       /* --valve-offset-pct: vertical position of the whole valve+pipes
-         assembly, in % of this element's own height, set by the visual
-         editor's slider. 0% = centered. Scale now lives on the valve svg
-         and water canvas individually — see below — so each can have its
-         own mobile/tablet max size instead of one shared multiplier. */
-      transform: translateY(var(--valve-offset-pct, 0%));
+         assembly, in % of .content's own height, set by the visual
+         editor's slider. 0% = dead center of the card. The -50% first
+         re-centers the box on its own midpoint (the standard absolute-
+         center trick — top:50% alone would align this box's TOP edge to
+         the card's middle, not its center), then the configured offset is
+         added on top of that. */
+      transform: translateY(calc(-50% + var(--valve-offset-pct, 0%)));
       /* Mobile (<600px) scale multipliers by default; overridden for
          tablet/desktop below. */
       --valve-scale: var(--valve-scale-mobile, 1.15);
@@ -417,6 +434,18 @@ class WaterValveCard extends HTMLElement {
        HA app in particular) — Grid tracks give the .sensor cells a real,
        stable width to base aspect-ratio:1/1 on, so they render as true
        squares everywhere. */
+    /* v5.0.6: wraps control-row-top + control-row. This — not
+       .valve-section — is now the thing pinned to the card's bottom edge
+       (margin-top:auto in .content's flex column pushes it as far down as
+       it can go). Since .valve-section is absolutely positioned and no
+       longer part of this flow, growing this group (e.g. a 3rd/4th leak
+       sensor adding a second row) no longer pushes the valve up — it just
+       grows upward from the bottom edge, freely overlapping the
+       (independently centered) pipe graphic above it if it needs to. */
+    .bottom-group {
+      margin-top: auto;
+      flex-shrink: 0;
+    }
     .control-row-top, .control-row {
       display: grid;
       grid-template-columns: 1fr 2fr 1fr;
@@ -439,12 +468,6 @@ class WaterValveCard extends HTMLElement {
     .card.many-sensors .control-row { gap: 8px; }
     .card.many-sensors .control-row-top { margin-bottom: 6px; z-index: 4; position: relative; }
     .card.many-sensors .control-row { margin-top: 6px; z-index: 4; }
-    /* Lets the sensor rows claim space first when a short card_height
-       can't fit everything — the pipe (flex:1, see .valve-section) is the
-       one flexible section, so it's the one that shrinks, and the
-       z-index bump above puts the sensor rows visually on top of it
-       instead of the two just clipping into each other. */
-    .card.many-sensors .valve-section { min-height: 24px; }
     /* Capped so a square never balloons past a sensible size on a wide
        card — without this, 1fr of a wide tablet card made a genuinely
        huge square with a tiny 28px drop icon lost in the middle of it.
@@ -904,11 +927,14 @@ class WaterValveCard extends HTMLElement {
     return Math.max(0, Math.min(100, Math.round(percent)));
   }
 
-  _getValveState() {
-    if (!this._hass) return { switchState: 'unknown', valveState: 'unknown', isOpen: false, isUnavailable: false, lastChanged: null };
-    const { switch_entity, valve_state_entity } = this._config;
-    const sw = this._hass.states[switch_entity];
-    const vs = valve_state_entity ? this._hass.states[valve_state_entity] : null;
+  // Pure function of (hass, config) — factored out of the instance method
+  // below so the editor's "Test" button (v5.0.6) can compute the exact same
+  // open/closed/unavailable reading without needing a live card instance.
+  static _computeValveState(hass, config) {
+    if (!hass) return { switchState: 'unknown', valveState: 'unknown', isOpen: false, isUnavailable: false, lastChanged: null };
+    const { switch_entity, valve_state_entity } = config || {};
+    const sw = hass.states[switch_entity];
+    const vs = valve_state_entity ? hass.states[valve_state_entity] : null;
     const switchState = sw?.state || 'unknown';
     const raw = (vs?.state || switchState || 'unknown').toString().toLowerCase().trim();
     const openStates = new Set(['on', 'open', 'opened', 'відкрито', 'открыто', 'відчинено']);
@@ -925,6 +951,31 @@ class WaterValveCard extends HTMLElement {
     // first render (unlike guessing "now").
     const lastChanged = (vs || sw)?.last_changed || null;
     return { switchState, valveState, isOpen, isUnavailable, lastChanged };
+  }
+
+  // True once the real entity has confirmed it reached `direction`. Shared
+  // between the card's own toggle measurement and the editor's Test button.
+  static _isMeasurementSettled(direction, valveState, isOpen, isUnavailable) {
+    if (isUnavailable) return false;
+    return direction === 'open'
+      ? isOpen === true
+      : (isOpen === false && valveState !== 'unknown' && valveState !== 'opening' && valveState !== 'closing');
+  }
+
+  // Issues the actual open/close command — shared between the card's own
+  // toggle and the editor's Test button so both use the exact same
+  // domain/service logic (valve domain vs plain switch).
+  static _issueToggleCommand(hass, switchEntity, isOpen) {
+    const domain = switchEntity.split('.')[0] || 'switch';
+    const isValveDomain = domain === 'valve';
+    const svc = isValveDomain
+      ? (isOpen ? 'close_valve' : 'open_valve')
+      : (isOpen ? 'turn_off' : 'turn_on');
+    return hass.callService(isValveDomain ? 'valve' : 'switch', svc, { entity_id: switchEntity });
+  }
+
+  _getValveState() {
+    return WaterValveCard._computeValveState(this._hass, this._config);
   }
 
   _closedAtKey() {
@@ -1022,11 +1073,7 @@ class WaterValveCard extends HTMLElement {
     // Not settled yet — an unavailable entity, or a still-ambiguous/
     // transitional state (raw 'opening'/'closing' from valve_state_entity,
     // or simply not yet flipped) never counts as confirmation.
-    if (isUnavailable) return;
-    const settled = pending.direction === 'open'
-      ? isOpen === true
-      : (isOpen === false && valveState !== 'unknown' && valveState !== 'opening' && valveState !== 'closing');
-    if (!settled) return;
+    if (!WaterValveCard._isMeasurementSettled(pending.direction, valveState, isOpen, isUnavailable)) return;
     const measuredMs = Date.now() - pending.startTs;
     this._pendingMeasure = null;
     WaterValveCard._storeMeasured(this._config.switch_entity, pending.direction, measuredMs);
@@ -1036,9 +1083,20 @@ class WaterValveCard extends HTMLElement {
     return `water-valve-card-measured:${entity}:${direction}`;
   }
 
+  // v5.0.6: keeps only the running MAXIMUM ever measured per direction — a
+  // slower-than-usual run (e.g. a cold winter morning, mains pressure dip)
+  // should never quietly lower the recommended value; a faster run should
+  // never raise it. "не менше X" (not less than X) only holds if X only
+  // ever grows.
   static _storeMeasured(entity, direction, ms) {
     if (!entity) return;
-    try { localStorage.setItem(WaterValveCard._measuredStorageKey(entity, direction), String(Math.round(ms))); } catch (e) {}
+    const key = WaterValveCard._measuredStorageKey(entity, direction);
+    try {
+      const prevRaw = localStorage.getItem(key);
+      const prev = prevRaw ? parseInt(prevRaw, 10) : NaN;
+      const next = isNaN(prev) ? ms : Math.max(prev, ms);
+      localStorage.setItem(key, String(Math.round(next)));
+    } catch (e) {}
   }
 
   // Read back by both the card (not currently needed) and the editor's
@@ -1082,16 +1140,10 @@ class WaterValveCard extends HTMLElement {
     this._isToggling = true;
     this._targetState = isOpen ? 'closed' : 'open';
     this._pendingMeasure = { direction: this._targetState, startTs: Date.now() };
-    const domain = switch_entity.split('.')[0] || 'switch';
-    const isValveDomain = domain === 'valve';
-    // The `valve` domain uses open_valve/close_valve, not open/close.
-    const svc = isValveDomain
-      ? (isOpen ? 'close_valve' : 'open_valve')
-      : (isOpen ? 'turn_off' : 'turn_on');
 
     let callResult;
     try {
-      callResult = this._hass.callService(isValveDomain ? 'valve' : 'switch', svc, { entity_id: switch_entity });
+      callResult = WaterValveCard._issueToggleCommand(this._hass, switch_entity, isOpen);
     } catch (e) {
       console.error('[water-valve-card] callService threw synchronously', e);
       this._cancelToggle();
@@ -1155,7 +1207,6 @@ class WaterValveCard extends HTMLElement {
             <div class="dot" id="dot"></div>
             <div class="status-text" id="status-text"></div>
           </div>
-          <div class="closed-at is-hidden" id="closed-at"></div>
 
           <div class="valve-section" id="valve-section">
             <canvas id="water-canvas" width="400" height="200"></canvas>
@@ -1279,33 +1330,38 @@ class WaterValveCard extends HTMLElement {
             </svg>
           </div>
 
-          <div class="control-row-top" id="control-row-top" style="display:none;">
-            <div class="sensor" id="sensor-2">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-2" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-2"></div>
-              <div class="sensor-state" id="state-2"></div>
-            </div>
-            <div class="control-spacer"></div>
-            <div class="sensor" id="sensor-3">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-3" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-3"></div>
-              <div class="sensor-state" id="state-3"></div>
-            </div>
-          </div>
-
-          <div class="control-row">
-            <div class="sensor" id="sensor-0">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-0" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-0"></div>
-              <div class="sensor-state" id="state-0"></div>
+          <div class="bottom-group">
+            <div class="control-row-top" id="control-row-top" style="display:none;">
+              <div class="sensor" id="sensor-2">
+                <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-2" viewBox="0 0 32 32" fill="none"></svg></div>
+                <div class="sensor-name" id="label-2"></div>
+                <div class="sensor-state" id="state-2"></div>
+              </div>
+              <div class="control-spacer"></div>
+              <div class="sensor" id="sensor-3">
+                <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-3" viewBox="0 0 32 32" fill="none"></svg></div>
+                <div class="sensor-name" id="label-3"></div>
+                <div class="sensor-state" id="state-3"></div>
+              </div>
             </div>
 
-            <button type="button" class="action-btn" id="action-btn"></button>
+            <div class="control-row">
+              <div class="sensor" id="sensor-0">
+                <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-0" viewBox="0 0 32 32" fill="none"></svg></div>
+                <div class="sensor-name" id="label-0"></div>
+                <div class="sensor-state" id="state-0"></div>
+              </div>
 
-            <div class="sensor" id="sensor-1">
-              <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-1" viewBox="0 0 32 32" fill="none"></svg></div>
-              <div class="sensor-name" id="label-1"></div>
-              <div class="sensor-state" id="state-1"></div>
+              <div class="action-col">
+                <div class="closed-at is-hidden" id="closed-at"></div>
+                <button type="button" class="action-btn" id="action-btn"></button>
+              </div>
+
+              <div class="sensor" id="sensor-1">
+                <div class="sensor-icon-wrap"><svg class="sensor-icon" id="icon-1" viewBox="0 0 32 32" fill="none"></svg></div>
+                <div class="sensor-name" id="label-1"></div>
+                <div class="sensor-state" id="state-1"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -2159,6 +2215,10 @@ class WaterValveCardEditor extends HTMLElement {
       measured_closed: 'Закриття',
       measured_recommend: 'Рекомендовано: не менше {ms} мс',
       measured_none: 'Ще немає даних — натисніть кран на картці один раз в кожен бік, щоб виміряти.',
+      measured_auto_label: 'Автоматично підставляти виміряний максимум у поле часу анімації вище',
+      measured_test_btn: 'Тест перемикання (виміряти зараз)',
+      measured_test_running: 'Перемикаю та вимірюю…',
+      measured_test_unavailable: 'Спочатку виберіть "Реле керування" і дочекайтесь, поки воно стане доступне.',
     },
     ru: {
       name: 'Название карточки',
@@ -2195,6 +2255,10 @@ class WaterValveCardEditor extends HTMLElement {
       measured_closed: 'Закрытие',
       measured_recommend: 'Рекомендовано: не меньше {ms} мс',
       measured_none: 'Пока нет данных — нажмите кран на карточке один раз в каждую сторону, чтобы измерить.',
+      measured_auto_label: 'Автоматически подставлять измеренный максимум в поле времени анимации выше',
+      measured_test_btn: 'Тест переключения (измерить сейчас)',
+      measured_test_running: 'Переключаю и измеряю…',
+      measured_test_unavailable: 'Сначала выберите "Реле управления" и дождитесь, пока оно станет доступным.',
     },
     en: {
       name: 'Card name',
@@ -2231,6 +2295,10 @@ class WaterValveCardEditor extends HTMLElement {
       measured_closed: 'Closing',
       measured_recommend: 'Recommended: at least {ms} ms',
       measured_none: 'No data yet — toggle the valve on the card once in each direction to measure it.',
+      measured_auto_label: 'Automatically apply the measured maximum to the animation time field above',
+      measured_test_btn: 'Test toggle (measure now)',
+      measured_test_running: 'Toggling and measuring…',
+      measured_test_unavailable: 'Pick a "Control switch" first and wait for it to become available.',
     },
   };
 
@@ -2261,10 +2329,29 @@ class WaterValveCardEditor extends HTMLElement {
     if (this._form) {
       this._form.hass = hass;
     }
+    this._checkPendingTestMeasure();
     // Live-refresh the measured value while the editor is open — e.g. the
     // user toggles the valve on the card in another dashboard tab while
     // still configuring it here.
     this._updateMeasuredNote();
+  }
+
+  // Mirrors WaterValveCard._checkPendingMeasurement for the editor's own
+  // Test button (v5.0.6) — same settlement rule, same abandoned-measurement
+  // timeout, same storage call, just driven by the editor's own hass
+  // updates instead of the card's _render().
+  _checkPendingTestMeasure() {
+    const pending = this._pendingTestMeasure;
+    if (!pending) return;
+    if (Date.now() - pending.startTs > 5 * 60 * 1000) {
+      this._pendingTestMeasure = null;
+      return;
+    }
+    const { valveState, isOpen, isUnavailable } = WaterValveCard._computeValveState(this._hass, this._config);
+    if (!WaterValveCard._isMeasurementSettled(pending.direction, valveState, isOpen, isUnavailable)) return;
+    const measuredMs = Date.now() - pending.startTs;
+    this._pendingTestMeasure = null;
+    WaterValveCard._storeMeasured(this._config?.switch_entity, pending.direction, measuredMs);
   }
 
   connectedCallback() {
@@ -2398,6 +2485,7 @@ class WaterValveCardEditor extends HTMLElement {
     if (out.toggle_lock_ms === undefined || out.toggle_lock_ms === null || out.toggle_lock_ms === "") {
       out.toggle_lock_ms = 8000;
     }
+    out.auto_toggle_lock_ms = out.auto_toggle_lock_ms === true;
     if (out.disable_animations === undefined || out.disable_animations === null) {
       out.disable_animations = false;
     } else {
@@ -2469,7 +2557,9 @@ class WaterValveCardEditor extends HTMLElement {
       this._redraw();
     } else {
       this._redrawLeakSensors();
+      if (this._form) this._form.data = this._formData();
     }
+    this._updateMeasuredNote();
   }
 
   // Used exclusively by the position/scale sliders. Unlike _commitConfig,
@@ -2507,6 +2597,16 @@ class WaterValveCardEditor extends HTMLElement {
 
       const measuredNote = document.createElement("div");
       measuredNote.className = "wvc-measured-note";
+      measuredNote.addEventListener("change", (ev) => {
+        if (ev.target && ev.target.matches(".wvc-measured-auto-checkbox")) {
+          this._commitConfig({ auto_toggle_lock_ms: !!ev.target.checked });
+        }
+      });
+      measuredNote.addEventListener("click", (ev) => {
+        if (ev.target && ev.target.matches(".wvc-measured-test-btn")) {
+          this._runMeasuredTest();
+        }
+      });
       wrap.appendChild(measuredNote);
       this._measuredNote = measuredNote;
 
@@ -2522,7 +2622,18 @@ class WaterValveCardEditor extends HTMLElement {
         .wvc-measured-hint { opacity: 0.6; margin-bottom: 6px; }
         .wvc-measured-values { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
         .wvc-measured-value b { font-family: monospace; }
-        .wvc-measured-recommend { font-weight: 500; }
+        .wvc-measured-recommend { font-weight: 500; margin-bottom: 8px; }
+        .wvc-measured-auto {
+          display: flex; align-items: center; gap: 6px; margin-bottom: 8px; cursor: pointer;
+        }
+        .wvc-measured-auto input { margin: 0; cursor: pointer; }
+        .wvc-measured-test-btn {
+          font: inherit; font-weight: 500; cursor: pointer;
+          padding: 6px 12px; border-radius: 6px; border: 1px solid var(--divider-color, rgba(0,0,0,0.15));
+          background: var(--card-background-color, transparent);
+          color: var(--primary-text-color, #000);
+        }
+        .wvc-measured-test-btn:disabled { opacity: 0.5; cursor: default; }
         .wvc-leak-section { margin-top: 16px; padding-top: 4px; }
         .wvc-leak-title, .wvc-valve-title {
           font-size: 14px; font-weight: 500; margin-bottom: 4px;
@@ -2608,10 +2719,21 @@ class WaterValveCardEditor extends HTMLElement {
       this._leakSection = section;
     }
 
-    const c = this._config || {};
     this._form.hass = this._hass;
     this._form.schema = this._schema();
-    this._form.data = {
+    this._form.data = this._formData();
+
+    this._refreshSliderUI();
+    this._redrawLeakSensors();
+    this._updateMeasuredNote();
+  }
+
+  // Shared by _redraw() and by anything that changes this._config without
+  // rebuilding the whole editor DOM (e.g. the measured-time auto-apply,
+  // v5.0.6) and just needs the <ha-form> to reflect the new value.
+  _formData() {
+    const c = this._config || {};
+    return {
       language: c.language || "uk",
       name: c.name || "Smart Water Valve",
       switch_entity: c.switch_entity || "",
@@ -2629,45 +2751,97 @@ class WaterValveCardEditor extends HTMLElement {
       card_min_height: c.card_min_height || 0,
       card_height: c.card_height || 0,
     };
-
-    this._refreshSliderUI();
-    this._redrawLeakSensors();
-    this._updateMeasuredNote();
   }
 
-  // v5.0.5 — renders the note under toggle_lock_ms showing how long the
-  // real switch_entity actually took to confirm open/close on the last
-  // toggle (see WaterValveCard._checkPendingMeasurement/_getMeasured).
-  // Purely informational: does not touch the config, just reads
-  // localStorage the card already wrote to.
+  // v5.0.5/v5.0.6 — renders the note under toggle_lock_ms showing how long
+  // the real switch_entity actually took to confirm open/close on the last
+  // toggle (see WaterValveCard._checkPendingMeasurement/_getMeasured), plus
+  // an "auto-apply the measured max" checkbox and a "Test" button that
+  // toggles the valve right from the editor to produce a fresh measurement
+  // without having to go find the card itself.
   _updateMeasuredNote() {
     const note = this._measuredNote;
     if (!note) return;
     const L = (key) => this._editorLabel(key);
     const entity = this._config?.switch_entity;
+    const testing = !!this._pendingTestMeasure;
+    const canTest = !!entity && !!this._hass && !testing;
+
     if (!entity) {
       note.innerHTML = "";
       return;
     }
+
     const { open, closed } = WaterValveCard._getMeasured(entity);
     const fmt = (ms) => ms === null ? "—" : `${(ms / 1000).toFixed(1)}с`;
-    if (open === null && closed === null) {
-      note.innerHTML = `
-        <div class="wvc-measured-title">${L("measured_title")}</div>
-        <div class="wvc-measured-hint">${L("measured_none")}</div>
-      `;
-      return;
-    }
     const recommended = Math.max(open || 0, closed || 0);
+    const autoChecked = this._config?.auto_toggle_lock_ms === true;
+
+    // Auto-apply: keep toggle_lock_ms in sync with the measured max, but
+    // only ever push it UP — _storeMeasured() already only ever grows, so
+    // this simply mirrors that value into the manual field once it's
+    // ahead of what's currently configured there.
+    if (autoChecked && recommended > 0) {
+      const clamped = Math.max(500, Math.min(120000, Math.round(recommended)));
+      if (this._config.toggle_lock_ms !== clamped) {
+        this._commitConfig({ toggle_lock_ms: clamped });
+        return; // _commitConfig() re-invokes this method with the new value.
+      }
+    }
+
+    const valuesHtml = (open === null && closed === null)
+      ? `<div class="wvc-measured-hint">${L("measured_none")}</div>`
+      : `
+        <div class="wvc-measured-hint">${L("measured_hint")}</div>
+        <div class="wvc-measured-values">
+          <span class="wvc-measured-value">${L("measured_open")}: <b>${fmt(open)}</b></span>
+          <span class="wvc-measured-value">${L("measured_closed")}: <b>${fmt(closed)}</b></span>
+        </div>
+        <div class="wvc-measured-recommend">${L("measured_recommend").replace("{ms}", String(recommended))}</div>
+      `;
+
     note.innerHTML = `
       <div class="wvc-measured-title">${L("measured_title")}</div>
-      <div class="wvc-measured-hint">${L("measured_hint")}</div>
-      <div class="wvc-measured-values">
-        <span class="wvc-measured-value">${L("measured_open")}: <b>${fmt(open)}</b></span>
-        <span class="wvc-measured-value">${L("measured_closed")}: <b>${fmt(closed)}</b></span>
-      </div>
-      <div class="wvc-measured-recommend">${L("measured_recommend").replace("{ms}", String(recommended))}</div>
+      ${valuesHtml}
+      <label class="wvc-measured-auto">
+        <input type="checkbox" class="wvc-measured-auto-checkbox" ${autoChecked ? "checked" : ""}>
+        ${L("measured_auto_label")}
+      </label>
+      <button type="button" class="wvc-measured-test-btn" ${canTest ? "" : "disabled"}>
+        ${testing ? L("measured_test_running") : L("measured_test_btn")}
+      </button>
     `;
+  }
+
+  // v5.0.6 — the editor-side "Test" button: toggles the real entity exactly
+  // like the card's own button does, and measures the real transition time
+  // the same way, storing it under the same key so both feed the same
+  // running-maximum. Lets the person get a fresh measurement without
+  // leaving the editor to go find the card on a dashboard.
+  _runMeasuredTest() {
+    if (this._pendingTestMeasure || !this._hass || !this._config?.switch_entity) return;
+    const { switch_entity } = this._config;
+    const { isOpen, isUnavailable } = WaterValveCard._computeValveState(this._hass, this._config);
+    if (isUnavailable) {
+      const note = this._measuredNote;
+      if (note) {
+        const L = (key) => this._editorLabel(key);
+        const hint = document.createElement("div");
+        hint.className = "wvc-measured-hint";
+        hint.textContent = L("measured_test_unavailable");
+        note.prepend(hint);
+      }
+      return;
+    }
+    const direction = isOpen ? 'closed' : 'open';
+    try {
+      WaterValveCard._issueToggleCommand(this._hass, switch_entity, isOpen);
+    } catch (e) {
+      console.error('[water-valve-card-editor] test toggle failed', e);
+      return;
+    }
+    this._pendingTestMeasure = { direction, startTs: Date.now() };
+    this._updateMeasuredNote();
   }
 
   // Slider definitions shared by _ensureLayoutSection/_refreshSliderUI.
@@ -2933,7 +3107,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c WATER-VALVE-CARD %c 5.0.5 ",
+  "%c WATER-VALVE-CARD %c 5.0.6 ",
   "background:#0369a1;color:#fff;font-weight:bold;padding:2px 6px;",
   "background:#0f172a;color:#38bdf8;font-weight:bold;padding:2px 6px;"
 );
