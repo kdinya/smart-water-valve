@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
-Current version: **v5.0.4**. See [Changelog](#changelog) for what's new.
+Current version: **v5.0.5**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -267,6 +267,13 @@ switch_entity: switch.water_valve
 - The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `disable_animations: true`.
 
 ## Changelog
+
+### v5.0.5
+
+- **Fixed:** the battery/signal indicators in the header were laid out with flex `space-between`, which relies on the state-label next to them shrinking to whatever space is left — but the label had no `min-width:0` and no line-wrap control, so a long single-word state (e.g. `ВІДКРИВАЄТЬСЯ`) could force the row wider than the card, throwing off where the indicators actually landed and making them appear to drift left as the state text changed length. The header is now a CSS grid (`1fr auto`) — the indicators column is always exactly as wide as its own content and flush against the card's right edge, completely independent of the state-label; the label itself is now always a single line (ellipsis on overflow) so it can no longer change the header's height either.
+- **Fixed:** the valve/pipe graphic could visibly shift position when the state text changed during a toggle (e.g. "ВІДКРИТО" → "ЗАКРИВАЄТЬСЯ" → "ЗАКРИТО"), because the space above it — the status text and the "closed at" timestamp — changed height depending on which text was showing (1 vs 2 line wrap, and the timestamp line being removed from flow entirely via `display:none` when hidden). Both now reserve constant space regardless of content: the status text always reserves 2 lines' worth of height, and the "closed at" line is hidden via `visibility` instead of `display`, so it keeps its slot in the layout even when blank. The valve, pipe, and buttons no longer move on toggle — only their text/color changes.
+- **Fixed:** leak-sensor blocks with 3 or 4 sensors configured (2 stacked rows) could render as oversized squares on wide tablet/desktop cards — since each sensor cell was always exactly `1fr` of the row's grid, a wide card made a very tall square, and two of those stacked routinely didn't fit vertically without visually colliding with the pipe above. Scoped strictly to 3-/4-sensor configs (the verified 2-sensor layout is untouched): sensor blocks now cap their size on phones and switch to horizontal rectangles on tablet/desktop instead of tall squares, the icon and text inside scale up to match (they were capped at a small fixed max size regardless of how big the block itself was), and the pipe section can yield a little more of its minimum height to the sensor rows first if a short `card_height` makes both compete for space.
+- **Added:** real switching-time measurement. The card now times how long the actual `switch_entity`/`valve_state_entity` takes to confirm each open/close after a toggle (separately for each direction) and remembers the result. The editor now shows this measured value directly under the manual "Toggle animation time" field, with a recommendation to set that field to at least the measured time — setting it lower is what caused the valve animation to visually reach its end position and then snap back briefly before continuing, since the visual animation was finishing before the real actuator had.
 
 ### v5.0.4
 

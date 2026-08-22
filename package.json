@@ -1,7 +1,7 @@
 {
   "name": "smart-water-valve-card",
   "private": true,
-  "version": "5.0.4",
+  "version": "5.0.5",
   "description": "Home Assistant Lovelace card for a smart water shut-off valve.",
   "scripts": {
     "test": "node tests/water-valve-card.test.js"
