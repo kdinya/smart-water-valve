@@ -6,7 +6,7 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
-Current version: **v5.0.3**. See [Changelog](#changelog) for what's new.
+Current version: **v5.0.4**. See [Changelog](#changelog) for what's new.
 
 ---
 
@@ -123,8 +123,10 @@ switch_entity: switch.water_valve
 | `disable_animations` | `boolean` | ❌ | Turns off the water/bubble canvas animation and every pulsing/blinking CSS effect. The valve-lever rotation on open/close is never affected — see [Animation switch](#animation-switch). **`true` = animations off** — the checkbox in the editor is titled "Disable animations", so the label and the behavior finally point the same direction (see [Changelog](#changelog) v5.0.3). | `false` (animations on) |
 | `text_dry` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is off (dry). | localized `"СУХО"` / `"DRY"` etc. |
 | `text_leak` | `string` | ❌ | Text shown on a leak indicator when the corresponding sensor is on (leak). | localized `"ПРОТІЧКА"` / `"LEAK"` etc. |
-| `btn_open` | `string` | ❌ | Label for the open action / state. | localized `"ВІДКРИТИ"` / `"OPEN"` etc. |
-| `btn_close` | `string` | ❌ | Label for the close action / state. | localized `"ПЕРЕКРИТИ"` / `"CLOSE"` etc. |
+| `btn_open` | `string` | ❌ | Label for the open action / state (resting state, valve open). | localized `"ВІДКРИТИ"` / `"OPEN"` etc. |
+| `btn_close` | `string` | ❌ | Label for the close action / state (resting state, valve closed). | localized `"ПЕРЕКРИТИ"` / `"CLOSE"` etc. |
+| `btn_opening` | `string` | ❌ | *(v5.0.4)* Button text shown **only while the valve is actively opening** (the `toggle_lock_ms` window), instead of the localized "opening…" text. Separate from `btn_open`, which is the resting "tap to open" label. | localized `"ВІДКРИВАЄТЬСЯ..."` / `"OPENING..."` etc. |
+| `btn_closing` | `string` | ❌ | *(v5.0.4)* Button text shown **only while the valve is actively closing**. Separate from `btn_close`. | localized `"ЗАКРИВАЄТЬСЯ..."` / `"CLOSING..."` etc. |
 | `toggle_lock_ms` | `number` (milliseconds, 500–120000) | ❌ | How long the card shows the transitional "opening…/closing…" state (and disables the button) after you press it. Set this to roughly how long your physical actuator takes to fully open/close. | `8000` (8 seconds) |
 | `card_min_height` | `number` (px) | ❌ | Minimum height for the card. On phones (viewport narrower than 600px) the card's height is always set to this value directly — see [Card height on phones vs. tablets/desktop](#card-height-on-phones-vs-tabletsdesktop). `0` means "no minimum". | `0` (auto) |
 | `card_height` | `number` (px) | ❌ | Fixed ("current") height for the card, used on tablets/desktop (viewport 600px or wider). `0` means "auto height". | `0` (auto) |
@@ -200,9 +202,17 @@ Holding down (~500ms) on the **valve + pipes graphic** (any of the four leak-sen
 
 Real valve actuators aren't instant — there's a mechanical delay between issuing the command and the valve physically finishing its move. The card models this with a transitional state: set `toggle_lock_ms` to roughly how many milliseconds your actuator needs (measure it once with a stopwatch or check your device's documentation). If the underlying service call fails, the card detects that and resets immediately instead of waiting out the full timer.
 
+**Everything animated during the transition is driven off this one setting, and only this setting:**
+
+- The valve-lever's rotation is a CSS transition whose `transition-duration` is set to `toggle_lock_ms` directly — it always takes exactly that long, no more, no less.
+- *(v5.0.4)* The water level inside the pipes reaches ~99% of its new level (full for the output pipe on open, empty on close) within that same `toggle_lock_ms` window. Before v5.0.4 the water used a fixed animation speed regardless of `toggle_lock_ms`, so at the 8-second default the water could finish draining/filling several seconds before the lever visually finished turning — they now always finish together, whatever you set `toggle_lock_ms` to.
+- The button's disabled "opening…/closing…" state (optionally customized via `btn_opening`/`btn_closing`) lasts for the same window, then re-enables.
+
+If you change `toggle_lock_ms` live in the editor, both the lever and the water speed pick up the new value immediately — no need to reopen the card.
+
 ## Localization
 
-Set `language: uk`, `language: ru` or `language: en` (or pick it from the dropdown in the visual editor) to switch every built-in string — button labels, DRY/LEAK text, and the descriptive status sentences under the valve state (e.g. *"System active, pressure stable"* / *"Leak detected: Kitchen!"* / *"Device is unavailable — check the connection"*). Any of `text_dry`, `text_leak`, `btn_open`, `btn_close` and `name` you set explicitly will override the localized default for that field only.
+Set `language: uk`, `language: ru` or `language: en` (or pick it from the dropdown in the visual editor) to switch every built-in string — button labels, DRY/LEAK text, and the descriptive status sentences under the valve state (e.g. *"System active, pressure stable"* / *"Leak detected: Kitchen!"* / *"Device is unavailable — check the connection"*). Any of `text_dry`, `text_leak`, `btn_open`, `btn_close`, `btn_opening`, `btn_closing` and `name` you set explicitly will override the localized default for that field only.
 
 ## Full YAML example
 
@@ -224,6 +234,8 @@ text_dry: DRY
 text_leak: LEAK!
 btn_open: OPEN
 btn_close: SHUT OFF
+btn_opening: Opening, please wait…
+btn_closing: Shutting off…
 toggle_lock_ms: 6000
 card_min_height: 260
 card_height: 340
@@ -245,7 +257,7 @@ switch_entity: switch.water_valve
 
 - **Press the open/close button** to toggle the valve — tapping the rest of the card does nothing. While the actuator is moving (per `toggle_lock_ms`), the button shows an "opening…"/"closing…" state and is disabled to avoid conflicting commands.
 - **Hold (long-press, ~500ms)** the valve + pipes graphic, any leak-sensor block, the battery indicator, or the signal indicator to open that entity's more-info dialog. A quick tap still just does its normal thing.
-- The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed.
+- The **left pipe** (supply side) is always shown filled with flowing water; the **right pipe** (output side) fills or empties depending on whether the valve is open or closed. *(v5.0.4)* The two pipes always meet exactly at the center of the graphic, with no gap — see [Changelog](#changelog) v5.0.4.
 - The valve + pipes graphic is layered **above** the sensor/button row, so it's never hidden underneath the buttons — even when its position/scale sliders push it lower or bigger than its section.
 - If the valve entity is missing or reports `unavailable`, the card shows a distinct grey **"Unavailable"** state instead of implying the valve is safely closed, and the button is disabled (there's nothing useful to call a service on).
 - When the valve is closed, the card shows the date/time it closed — regardless of what closed it (this card, another dashboard, an automation). It disappears again as soon as the valve is open.
@@ -255,6 +267,17 @@ switch_entity: switch.water_valve
 - The water/bubble canvas animation automatically pauses when the browser tab is hidden, the card scrolls out of view, or less than 30% of it is visible, and resumes once it's meaningfully on-screen again — and stays off entirely if you've set `disable_animations: true`.
 
 ## Changelog
+
+### v5.0.4
+
+- **Fixed:** the "closed at" timestamp (added in v4.5.0) fell back to "just now" whenever there was no cached value yet for the current browser — e.g. the very first time the card ever rendered, or if the valve had already been closed long before this card instance existed. It now reads the entity's own `last_changed` from Home Assistant as the primary source of truth (free, accurate, correct on the very first render), and only uses the browser cache as a same-session memory aid, never to invent a timestamp.
+- **Fixed:** enlarging the pipes or using different `valve_scale_*` vs. `pipes_scale_*` values could leave a visible unfilled/empty stretch of pipe between the water and the valve body ("a piece with no water"). The v5.0.3 fix measured the valve graphic's actual on-screen position (`getBoundingClientRect`) each time and used that as the water's boundary — but that measurement is taken in transformed screen-pixel space while the canvas draws in its own untransformed pixel space, so the two could still disagree whenever `valve_scale_*` and `pipes_scale_*` differed. **Reworked from scratch:** the pipe is now always drawn as exactly two halves — a supply half (always full) and an output half (drains to empty as the valve closes) — that meet at a single, always-correct point: the exact horizontal center of the water canvas (`WaterValveCard._pipeSplitX()`), the same point the canvas already scales around. No more measuring the valve at all, so there is no longer any way for the two halves to disagree — they're mathematically the same value by construction, at every zoom level.
+- **Fixed:** the water level's fill/drain animation used a fixed speed, completely independent of `toggle_lock_ms` — at the 8-second default it actually finished in roughly 4 seconds, so the valve-lever (which *does* honor `toggle_lock_ms` exactly, via a CSS transition) could still be slowly rotating for several seconds after the pipe had already visually finished draining or filling. The water animation now derives its speed from the same `toggle_lock_ms` value the lever's rotation uses, so both always finish together — see [Toggle animation timing](#toggle-animation-timing).
+- **Fixed:** the valve graphic could visually overlap the header text above it, inconsistently, depending on phone orientation — and briefly flash oversized for a frame right after rotating. Root cause: the valve was resized with a CSS `transform: scale()`, which changes how big something *paints* but not the layout space reserved for it; the valve's section only ever reserved space for the *unscaled* graphic, so at the default 1.15× scale (or higher) it always painted outside its box, and by how much depended on which of `valve_scale_mobile`/`valve_scale_tablet` the current `@container` breakpoint picked. The valve now scales by actually changing its rendered **width** (with height following automatically via its aspect ratio) instead of a paint-only transform, so the containing section reserves the correct space up front — no overlap, no rotation flash, identical result in either orientation.
+- **Fixed:** leak-sensor blocks (icon/name/state) could get visually clipped on small screens or short `card_min_height` values — the layout used fixed pixel sizes (28px icon, 9px/14px text) that didn't shrink with the block. Each block is now its own CSS container and sizes its icon and text with `clamp()` off its own rendered size, and is laid out tightly (drop icon right at the top, name centered, state right at the bottom) instead of loosely centered as one group.
+- **Added:** `btn_opening` / `btn_closing` — optional config fields for button text shown specifically **while the valve is opening/closing**, separate from the resting `btn_open`/`btn_close` labels. Falls back to the existing localized "opening…/closing…" text if left blank.
+- **Added:** a small dependency-free unit test suite (`tests/`, `npm test`) covering the config migration, valve-state resolution, and the toggle-timing/pipe-split math touched by this release. See `tests/README.md` for scope and how it loads the card's plain-browser-script class under Node.
+- **Note:** an earlier `v5.0.4` GitHub Release was published with this changelog text before the corresponding code was actually merged to `main` — that release pointed at v5.0.3's code with a mismatched description. This has been corrected; the `v5.0.4` tag now points at the commit that actually contains everything listed above.
 
 ### v5.0.3
 
