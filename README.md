@@ -1,6 +1,8 @@
 # 🚰 Water Valve Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![Validate](https://img.shields.io/github/actions/workflow/status/kdinya/smart-water-valve/validate.yml?branch=main&label=HACS%20validation&style=for-the-badge)](https://github.com/kdinya/smart-water-valve/actions/workflows/validate.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/kdinya/smart-water-valve/test.yml?branch=main&label=tests&style=for-the-badge)](https://github.com/kdinya/smart-water-valve/actions/workflows/test.yml)
 [![GitHub release](https://img.shields.io/github/release/kdinya/smart-water-valve.svg?style=for-the-badge)](https://github.com/kdinya/smart-water-valve/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
 
@@ -73,11 +75,11 @@ The card is a self-contained visual control for a water valve actuator:
    ```
    https://github.com/kdinya/smart-water-valve
    ```
-   Category: **Lovelace**.
+   Type: **Dashboard** (this category was called "Lovelace", then "Plugin", in older HACS versions — pick whichever of those your HACS shows).
 4. Find **Water Valve Card** in the list and click **Download**.
 5. Make sure the resource `water-valve-card.js` was added automatically under **Settings → Dashboards → ⋮ → Resources** (HACS does this for you).
 6. Hard-refresh your browser (**Ctrl+F5** / **Cmd+Shift+R**) so the new JavaScript is loaded, not a cached copy.
-7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` / `5.0.2` log line — this confirms the right version is active.
+7. Open the browser console (F12) and confirm you see a `WATER-VALVE-CARD` log line with the current version number (see [Changelog](#changelog)) — this confirms the right version is active.
 
 ### Manual installation
 

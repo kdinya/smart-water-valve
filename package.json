@@ -6,5 +6,14 @@
   "scripts": {
     "test": "node tests/water-valve-card.test.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kdinya/smart-water-valve.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kdinya/smart-water-valve/issues"
+  },
+  "homepage": "https://github.com/kdinya/smart-water-valve#readme",
+  "author": "kdinya",
   "license": "MIT"
 }
