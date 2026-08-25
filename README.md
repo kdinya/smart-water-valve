@@ -8,6 +8,10 @@
 
 A custom Home Assistant Lovelace card for a smart water shut-off valve, with animated flowing water, leak-sensor status, battery and signal-strength indicators, a fully dynamic leak-sensor list (up to 4), independent valve/pipes scale controls, and full UK/RU/EN localization.
 
+![All four valve states — open, closing, closed, opening](images/preview-states.png)
+
+*The four states (real screenshots) — the pipes also animate flowing water and the lever rotates smoothly on toggle.*
+
 Current version: **v5.0.6**. See [Changelog](#changelog) for what's new.
 
 ---
@@ -99,6 +103,8 @@ The card is a self-contained visual control for a water valve actuator:
 1. Edit your dashboard → **Add card**.
 2. Search for **"Water Valve"** or **"Водяний"**.
 3. The card's built-in editor opens, letting you pick every entity and label from dropdowns — no YAML needed. Fields appear in this order: language, name, valve switch, valve state sensor, battery sensor, signal sensor, animation toggle, text/button overrides, toggle animation timing, min/fixed card height — followed by a **position and scale** section (5 sliders: valve+pipes vertical offset, valve scale on phone/tablet, pipes scale on phone/tablet) and a separate **Leak sensors** list at the bottom (see [Leak sensors](#leak-sensors)). See the [Configuration reference](#configuration-reference) below for what each field does.
+
+<img src="images/editor-entities.jpg" alt="Visual editor — entity pickers" width="360"> <img src="images/editor-layout.jpg" alt="Visual editor — position/scale sliders and leak sensors" width="360">
 
 ### Using YAML
 
