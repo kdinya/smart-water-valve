@@ -41,6 +41,7 @@ Current version: **v5.0.6**. See [Changelog](#changelog) for what's new.
 - [Changelog](#changelog)
 - [Troubleshooting](#troubleshooting)
 - [Versioning](#versioning)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -381,6 +382,10 @@ switch_entity: switch.water_valve
 ## Versioning
 
 This project follows `MAJOR.MINOR.PATCH`. See the [Releases](https://github.com/kdinya/smart-water-valve/releases) page for the changelog of each version.
+
+## Contributing
+
+Bug reports and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the project layout, how to run the tests, and what to include in a bug report. This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Found a security issue? See [SECURITY.md](SECURITY.md).
 
 ## License
 
