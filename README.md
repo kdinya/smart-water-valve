@@ -358,7 +358,7 @@ switch_entity: switch.water_valve
 - **Changed:** a leak sensor block's visibility now depends only on whether its entity is configured; the label is purely cosmetic.
 - **Added:** the water/bubble canvas animation now pauses when the browser tab is hidden or the card is scrolled out of view (`IntersectionObserver` + `visibilitychange`), reducing CPU usage on dashboards you're not actively looking at.
 
-### v4.1.0
+### v4.2.0
 
 - **Fixed:** toggling a `valve`-domain entity called the wrong services (`valve.open`/`valve.close`, which don't exist) — now correctly calls `valve.open_valve`/`valve.close_valve`.
 - **Fixed:** `text_dry`, `text_leak`, `btn_open` and `btn_close` were accepted in the config but silently ignored by the renderer — they now correctly override the localized defaults, and are exposed in the visual editor.
